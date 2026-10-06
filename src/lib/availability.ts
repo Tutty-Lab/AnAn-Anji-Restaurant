@@ -28,17 +28,22 @@ export function hasStarted(employee: Employee, isoDate: string): boolean {
   return employee.startDate == null || isoDate >= employee.startDate;
 }
 
+/** Ist die Person an diesem Tag schon ausgetreten? Ohne endDate: nie. */
+export function hasLeft(employee: Employee, isoDate: string): boolean {
+  return employee.endDate != null && isoDate > employee.endDate;
+}
+
 /** Liegt das Datum in einer Berufsschulzeit (Azubi, kỳ học)? */
 export function inSchoolPeriod(employee: Employee, isoDate: string): boolean {
   return (employee.schoolPeriods ?? []).some((period) => isoDate >= period.start && isoDate <= period.end);
 }
 
 /**
- * Zählt dieser Tag für den Vertrag? Vor dem Eintritt und in der Schulzeit nicht –
+ * Zählt dieser Tag für den Vertrag? Vor dem Eintritt, nach dem Austritt und in der Schulzeit nicht –
  * dort schuldet die Person keine Stunden im Laden.
  */
 export function countsForContract(employee: Employee, isoDate: string): boolean {
-  return hasStarted(employee, isoDate) && !inSchoolPeriod(employee, isoDate);
+  return hasStarted(employee, isoDate) && !hasLeft(employee, isoDate) && !inSchoolPeriod(employee, isoDate);
 }
 
 /**

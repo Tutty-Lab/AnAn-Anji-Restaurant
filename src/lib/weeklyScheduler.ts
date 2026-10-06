@@ -69,10 +69,14 @@ export const SCHEDULER_TUNING = {
   peakSlotCost: 150,
   /** Teilzeit/Minijob: je 30 Minuten an einem ruhigen Tag (× Abstand zum stärksten Gewicht). */
   peakDayCost: 100,
-  /** Vollzeit: Dienst weicht vom festen Wochenmuster ab. */
-  patternShiftCost: 3000,
+  /**
+   * Vollzeit: Dienst weicht vom festen Wochenmuster ab. Mit underStaffCost/
+   * overStaffCost (je ×6) mitgehoben, sonst verliert das feste Muster gegen die
+   * Mittagsküche „genau 2" (Cong Tri Duong im Oktober 2026: 62 % statt ≥ 65 %).
+   */
+  patternShiftCost: 18000,
   /** Vollzeit: Arbeit an einem Wochentag, der im Muster frei ist. */
-  patternDayCost: 3000,
+  patternDayCost: 18000,
   /** Durchläufe „Woche je Person neu planen". */
   refitPasses: 3,
   /** Fahrer: je 30 Minuten, die ein Dienst kürzer ist als das Fahrerfenster. */
@@ -103,11 +107,46 @@ export const SCHEDULER_TUNING = {
   peakFirstKitchen: false,
   /** false = Teilzeit/Minijob im Service erst nach Azubi und Vollzeit (füllen die Service-Lücken). */
   peakFirstService: true,
+  /**
+   * „30 Minuten verschieben" (rebalanceWithinWeeks) in Schritten bis zu so vielen
+   * Einheiten, und ein Teildienst darf dabei ganz wegfallen. Mit nur einer Einheit
+   * blieb z. B. ein 3-h-Mittagsdienst (= kürzester Dienst) unverschiebbar, und die
+   * halbe Stunde Service fehlte am Montagmittag, während freitags drei da waren.
+   */
+  rebalanceMaxSlots: 6,
+  /**
+   * Kosten je Person-Minute unter der Mindest- bzw. über der Höchstbesetzung einer
+   * Regel. Vorher 500: eine fehlende halbe Stunde (15.000) war BILLIGER als der
+   * Tagesstunden-Term, wenn ein 3-h-Dienst dafür von Samstag auf Montag wandert
+   * (2 × 3² × 1.500 = 27.000) – der Planer ließ die Lücke lieber stehen. Gemessen
+   * Jan–Dez 2026 mit der Startbelegschaft (scripts/quality.mts): Service unter 2
+   * von 227 auf 155 halbe Stunden, Vollzeit-Muster (schlechteste Person) 42 → 55 %,
+   * Tage unter 3 h ohne Fahrer 32 → 22; Mittagsküche ≠ 2 von 6 auf 11 halbe
+   * Stunden. Über- und Unterbesetzung gleich teuer, sonst kippt „mittags genau 2
+   * in der Küche". Fahrerfenster bleiben bei DRIVER_WINDOW_COST.
+   */
+  underStaffCost: 3000,
+  overStaffCost: 3000,
+  /**
+   * AnAn: harte Regeln („luôn có 1 phục vụ, 1 bếp") kosten je fehlender Person-Minute
+   * so viel mal mehr als weiche Vorgaben – eine Lücke in der Mindestbesetzung wird
+   * nie gegen eine dritte Person mittags getauscht.
+   */
+  hardRuleFactor: 10,
+  /**
+   * Monatsvertrag: Kosten je halber Stunde, die eine Woche unter ihrem Budget
+   * bleibt (wird später an anderen Tagen nachgeholt). Zwischen einer weichen
+   * (90.000) und einer harten Lücke (900.000) je halbe Stunde.
+   */
+  weekShortCost: 300000,
 };
 
 const MAX_DAY_WEIGHT = Math.max(...Object.values(DAY_WEIGHTS));
 const GROUP_INDEX: Record<StaffGroup, number> = { KITCHEN: 0, SERVICE: 1, DRIVER: 2 };
 const groupMask = (groups: readonly StaffGroup[]) => groups.reduce((mask, group) => mask | (1 << GROUP_INDEX[group]), 0);
+const DRIVER_MASK = groupMask(["DRIVER"]);
+/** Kosten je Person-Minute über/unter der Fahrerbesetzung (bisheriger Wert für alle Regeln). */
+const DRIVER_WINDOW_COST = 500;
 
 function hash(value: string): number {
   let result = 0;
@@ -208,10 +247,12 @@ function styleCostOf(employee: Employee, date: string, weekday: WeekdayKey, shif
     cost += (MAX_DAY_WEIGHT - DAY_WEIGHTS[weekday]) * paidSlots * SCHEDULER_TUNING.peakDayCost;
   }
   if (staffGroupOf(employee) === "DRIVER") {
-    // Am liebsten das ganze Fahrerfenster; kürzer nur, um den Vertrag genau zu treffen.
+    // Am liebsten die ganze Kernzeit am Abend; ein Dienst nur mittags deckt sie
+    // nicht und kostet – Mittag bleibt für Stunden, die abends keinen Platz haben.
     const window = driverWindowOf(weekday);
-    const present = shifts.reduce((sum, shift) => sum + shift.endMinutes - shift.startMinutes, 0);
-    cost += Math.max(0, window.endMinutes - window.startMinutes - present) / SLOT * SCHEDULER_TUNING.driverShortCost;
+    const covered = shifts.reduce((sum, shift) =>
+      sum + Math.max(0, Math.min(shift.endMinutes, window.endMinutes) - Math.max(shift.startMinutes, window.startMinutes)), 0);
+    cost += Math.max(0, window.endMinutes - window.startMinutes - covered) / SLOT * SCHEDULER_TUNING.driverShortCost;
   }
   if (employee.employmentType === "VOLLZEIT") {
     const pattern = ctx.patterns.get(employee.id);
@@ -275,7 +316,7 @@ function optionsFor(
 type DayModel = {
   minutes: number[];
   targets: number[];
-  windows: { slots: number[]; overlap: number[]; minStaff: number; maxStaff: number; mask: number }[];
+  windows: { slots: number[]; overlap: number[]; minStaff: number; maxStaff: number; mask: number; hard: boolean }[];
 };
 const dayModelCache = new Map<string, DayModel>();
 function dayModel(blocks: DayBlocks, weekday: WeekdayKey, targetHours: number, present: ReadonlySet<StaffGroup>): DayModel {
@@ -292,7 +333,7 @@ function dayModel(blocks: DayBlocks, weekday: WeekdayKey, targetHours: number, p
       const covered = Math.min(window.endMinutes, minute + SLOT) - Math.max(window.startMinutes, minute);
       if (covered > 0) { slots.push(index); overlap.push(covered); }
     });
-    return { slots, overlap, minStaff: window.minStaff, maxStaff: window.maxStaff, mask: groupMask(window.groups) };
+    return { slots, overlap, minStaff: window.minStaff, maxStaff: window.maxStaff, mask: groupMask(window.groups), hard: window.hard };
   });
   const model = { minutes, targets: slotList.map(([, target]) => target), windows };
   if (dayModelCache.size > 5000) dayModelCache.clear();
@@ -302,7 +343,7 @@ function dayModel(blocks: DayBlocks, weekday: WeekdayKey, targetHours: number, p
 
 /**
  * Day cost from headcounts per 30-minute slot and group (shifts and pauses lie on that grid):
- *  - staffing windows: every missing/extra person-minute of the window's groups costs 500,
+ *  - staffing windows: every missing/extra person-minute of the window's groups costs SCHEDULER_TUNING.underStaffCost / overStaffCost,
  *  - demand curve: squared deviation of the IN-HOUSE headcount from the slot target,
  *  - paid hours: squared deviation of the in-house hours from the day's weighted hours.
  * Drivers only count for their own window.
@@ -321,11 +362,16 @@ function dayCost(shifts: Shift[], blocks: DayBlocks, weekday: WeekdayKey, target
   }
   let cost = 0;
   for (const window of model.windows) {
+    // Fahrerfenster bleiben beim alten Gewicht: dort gab es nie Lücken, und das
+    // höhere Gewicht zerlegte die Woche eines Fahrers in mehr, kürzere Abende.
+    const driverOnly = window.mask === DRIVER_MASK;
+    const under = driverOnly ? DRIVER_WINDOW_COST : SCHEDULER_TUNING.underStaffCost * (window.hard ? SCHEDULER_TUNING.hardRuleFactor : 1);
+    const over = driverOnly ? DRIVER_WINDOW_COST : SCHEDULER_TUNING.overStaffCost;
     for (let k = 0; k < window.slots.length; k++) {
       const slot = window.slots[k];
       let staff = 0;
       for (let g = 0; g < counts.length; g++) if (window.mask & (1 << g)) staff += counts[g][slot];
-      cost += (Math.max(0, window.minStaff - staff) + Math.max(0, staff - window.maxStaff)) * window.overlap[k] * 500;
+      cost += (Math.max(0, window.minStaff - staff) * under + Math.max(0, staff - window.maxStaff) * over) * window.overlap[k];
     }
   }
   for (let i = 0; i < n; i++) {
@@ -431,14 +477,23 @@ function chooseWeek(
     }
     states = next;
   }
-  // Exact weekly minutes take priority. An impossible quota stays short and
-  // is reported by validation, never transferred to another week.
+  // Wochenvertrag: die genauen Wochenminuten gehen vor; ein unerfüllbares Soll
+  // bleibt kurz und wird gemeldet. Monatsvertrag: jede fehlende halbe Stunde
+  // kostet weekShortCost – teurer als weiche Vorgaben, billiger als eine Lücke in
+  // einer harten Regel. Den Rest holt topUpShortfalls an anderen Tagen nach.
+  // (z. B. 31.07.2023: ein einzelner Montag am Monatsende, je Person 4,5 h – das
+  // passt nur abends, mittags blieben Küche und Service leer.)
+  const monthly = employee.weeklyHours == null;
   let best: Allocation | undefined;
   let bestCost = Infinity;
   for (const state of states.values()) {
     // Die Tageszahl hält, die Länge je Tag folgt dem Gewicht.
-    const cost = state.cost + (state.choices.length - preferredCount) ** 2 * 50000;
-    if (!best || state.paid > best.paid || (state.paid === best.paid && cost < bestCost)) {
+    const cost = state.cost + (state.choices.length - preferredCount) ** 2 * 50000 +
+      (monthly ? (target - state.paid) / SLOT * SCHEDULER_TUNING.weekShortCost : 0);
+    const better = monthly
+      ? cost < bestCost
+      : !best || state.paid > best.paid || (state.paid === best.paid && cost < bestCost);
+    if (better) {
       best = state;
       bestCost = cost;
     }
@@ -542,7 +597,7 @@ function topUpShortfalls(result: Shift[], employees: Employee[], budgets: Map<st
     if (employee.fixedShift) continue;
     const weekly = budgets.get(employee.id) ?? new Map<string, number>();
     const budgetTotal = [...weekly.values()].reduce((sum, minutes) => sum + minutes, 0);
-    for (let round = 0; round < 20; round++) {
+    for (let round = 0; round < 60; round++) {
       const own = shifts.filter((shift) => shift.employeeId === employee.id);
       if (budgetTotal - paidOf(own) < SLOT) break;
       let best: { old: Shift; next: Shift; delta: number } | undefined;
@@ -686,33 +741,41 @@ function rebalanceWithinWeeks(result: Shift[], employees: Employee[], ctx: Ctx):
       }
       return variants;
     };
-    /** Kostenänderung eines Tages, wenn `old` durch `next` ersetzt wird (Besetzung + Vorlieben). */
-    const change = (old: Shift, next: Shift) => {
+    /** Kostenänderung eines Tages, wenn `old` durch `next` ersetzt (null = gestrichen) wird. */
+    const change = (old: Shift, next: Shift | null) => {
       const onDay = shifts.filter((s) => s.date === old.date);
       const own = onDay.filter((s) => s.employeeId === employee.id);
-      const swap = (list: Shift[]) => list.map((s) => (s === old ? next : s));
+      const swap = (list: Shift[]) => list.flatMap((s) => (s === old ? (next ? [next] : []) : [s]));
       const weekday = weekdayOf(old.date);
       return dayScore(old.date, swap(onDay)) + styleCostOf(employee, old.date, weekday, swap(own), ctx)
         - dayScore(old.date, onDay) - styleCostOf(employee, old.date, weekday, own, ctx);
     };
+    type Variant = { old: Shift; next: Shift | null; delta: number };
 
-    for (let round = 0; round < 12; round++) {
+    for (let round = 0; round < 12 * SCHEDULER_TUNING.rebalanceMaxSlots; round++) {
       const own = shifts.filter((s) => s.employeeId === employee.id);
-      const shorter = own.flatMap((shift) => resized(shift, -SLOT).map((next) => ({ old: shift, next, delta: change(shift, next) })));
-      const longer = own.flatMap((shift) => resized(shift, SLOT).map((next) => ({ old: shift, next, delta: change(shift, next) })));
-      let best: { a: (typeof shorter)[number]; b: (typeof longer)[number]; delta: number } | undefined;
-      for (const a of shorter) for (const b of longer) {
-        if (a.old.date === b.old.date) continue;
-        // Wochenvertrag: nur innerhalb der Woche. Monatsvertrag: im ganzen Monat – so
-        // holt ein Fahrer die halbe Stunde am Sonntagabend einer kurzen Randwoche aus
-        // einer anderen Woche, in der zwei Fahrer gleichzeitig unterwegs sind.
-        if (employee.weeklyHours != null && weekStartOf(a.old.date) !== weekStartOf(b.old.date)) continue;
-        const delta = a.delta + b.delta;
-        if (delta < -1e-6 && (!best || delta < best.delta)) best = { a, b, delta };
+      let best: { a: Variant; b: Variant; delta: number } | undefined;
+      for (let k = 1; k <= SCHEDULER_TUNING.rebalanceMaxSlots; k++) {
+        const amount = k * SLOT;
+        const shorter: Variant[] = own.flatMap((shift) => resized(shift, -amount).map((next) => ({ old: shift, next, delta: change(shift, next) })));
+        // Ein Teildienst darf ganz wegfallen, wenn genau seine Zeit woandershin wandert
+        // (sonst sperrt die 3-h-Untergrenze z. B. den Mittagsteil eines geteilten Dienstes).
+        if (k > 1) for (const shift of own) if (shift.paidMinutes === amount) shorter.push({ old: shift, next: null, delta: change(shift, null) });
+        const longer: Variant[] = own.flatMap((shift) => resized(shift, amount).map((next) => ({ old: shift, next, delta: change(shift, next) })));
+        for (const a of shorter) for (const b of longer) {
+          if (a.old.date === b.old.date) continue;
+          // Wochenvertrag: nur innerhalb der Woche. Monatsvertrag: im ganzen Monat – so
+          // holt ein Fahrer die halbe Stunde am Sonntagabend einer kurzen Randwoche aus
+          // einer anderen Woche, in der zwei Fahrer gleichzeitig unterwegs sind.
+          if (employee.weeklyHours != null && weekStartOf(a.old.date) !== weekStartOf(b.old.date)) continue;
+          const delta = a.delta + b.delta;
+          if (delta < -1e-6 && (!best || delta < best.delta)) best = { a, b, delta };
+        }
       }
       if (!best) break;
       const chosen = best;
-      shifts = shifts.map((s) => (s === chosen.a.old ? chosen.a.next : s === chosen.b.old ? chosen.b.next : s));
+      shifts = shifts.flatMap((s) =>
+        s === chosen.a.old ? (chosen.a.next ? [chosen.a.next] : []) : s === chosen.b.old ? [chosen.b.next!] : [s]);
     }
   }
   return shifts;

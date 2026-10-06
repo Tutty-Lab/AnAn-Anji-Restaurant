@@ -7,10 +7,10 @@ import { monthlyTargetMinutes, monthlyTargetMinutesFor, SCHEDULE_SLOT_MINUTES } 
 import { calculatePause, minutesToShortHours, minutesToTime } from "./time";
 import { maxConsecutiveRun } from "./consecutive";
 import { weekStartOf } from "./weeks";
-import { driverWindowOf, staffGroupOf, validPause } from "./staffing";
+import { guestBlocks, staffGroupOf, validPause } from "./staffing";
 import { mayWorkOn } from "./availability";
 import { publicHolidays } from "./holidays";
-import { effectiveWeekdayKey, type WorkHoursConfig } from "./workHours";
+import { resolveDay, type WorkHoursConfig } from "./workHours";
 
 export type ValidationError = {
   employeeId?: string;
@@ -102,11 +102,11 @@ export function validateSchedule(
     if (employee && !mayWorkOn(employee, shift.date)) errors.push({ employeeId: employee.id, date: shift.date,
       message: `${employee.name}: đã xếp vào ngày không thể làm ${shift.date}.`,
     });
-    if (employee && staffGroupOf(employee) === "DRIVER") {
-      // Fahrer: nur 18–21 Uhr, sonntags und an Feiertagen 18–22 Uhr.
-      const window = driverWindowOf(effectiveWeekdayKey(shift.date, holidaysOf(shift.date)));
-      if (shift.startMinutes < window.startMinutes || shift.endMinutes > window.endMinutes) errors.push({ employeeId: employee.id, date: shift.date,
-        message: `${employee.name}: lái xe chỉ làm ${minutesToTime(window.startMinutes)}–${minutesToTime(window.endMinutes)} (ngày ${shift.date}).`,
+    if (employee && staffGroupOf(employee) === "DRIVER" && workHours) {
+      // Fahrer: nur in den Öffnungszeiten (nicht in der Küchenvorbereitung).
+      const open = guestBlocks(resolveDay(workHours, shift.date, holidaysOf(shift.date), {}).blocks);
+      if (!open.some((block) => shift.startMinutes >= block.startMinutes && shift.endMinutes <= block.endMinutes)) errors.push({ employeeId: employee.id, date: shift.date,
+        message: `${employee.name}: lái xe chỉ làm trong giờ mở cửa (ngày ${shift.date}, ${minutesToTime(shift.startMinutes)}–${minutesToTime(shift.endMinutes)}).`,
       });
     }
     if (shift.pauseStartMinutes != null && !validPause(shift)) errors.push({ employeeId: shift.employeeId, date: shift.date,

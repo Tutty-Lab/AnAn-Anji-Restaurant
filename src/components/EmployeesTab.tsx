@@ -71,6 +71,7 @@ type Draft = {
   availableWeekdays: WeekdayKey[]; // [] = mọi ngày
   maxDays: string;
   startDate: string; // "yyyy-MM-dd" hoặc "" = từ đầu tháng
+  endDate: string; // "yyyy-MM-dd" hoặc "" = vẫn làm
 };
 
 function draftFrom(emp?: Employee): Draft {
@@ -89,6 +90,7 @@ function draftFrom(emp?: Employee): Draft {
     availableWeekdays: emp?.availableWeekdays ?? [],
     maxDays: emp?.maxDaysPerWeek ? String(emp.maxDaysPerWeek) : "",
     startDate: emp?.startDate ?? "",
+    endDate: emp?.endDate ?? "",
   };
 }
 
@@ -104,6 +106,10 @@ function advancedSummary(d: Draft): string | null {
   if (ISO_DATE.test(d.startDate)) {
     const [year, month, day] = d.startDate.split("-");
     parts.push(`vào làm ${day}.${month}.${year}`);
+  }
+  if (ISO_DATE.test(d.endDate)) {
+    const [year, month, day] = d.endDate.split("-");
+    parts.push(`thôi làm ${day}.${month}.${year}`);
   }
   return parts.length > 0 ? parts.join(" · ") : null;
 }
@@ -153,6 +159,7 @@ function draftToEmployee(d: Draft): Omit<Employee, "id"> {
     maxDaysPerWeek: d.maxDays === "" || tage < 1 ? undefined : Math.min(7, Math.round(tage)),
     // Leeres Feld = von Monatsanfang an dabei (kein Eintrittsdatum).
     startDate: ISO_DATE.test(d.startDate) ? d.startDate : undefined,
+    endDate: ISO_DATE.test(d.endDate) ? d.endDate : undefined,
   };
 }
 
@@ -600,6 +607,26 @@ function EmployeeSheet({
                   <button
                     type="button"
                     onClick={() => set("startDate", "")}
+                    className="text-xs text-slate-500 hover:text-slate-700 underline"
+                  >
+                    Xoá
+                  </button>
+                )}
+              </div>
+            </label>
+            <label className="block mt-3">
+              <span className="text-xs text-slate-600">Ngày thôi làm (ngày làm cuối)</span>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="date"
+                  className={`${inputClass}`}
+                  value={d.endDate}
+                  onChange={(e) => set("endDate", e.target.value)}
+                />
+                {d.endDate && (
+                  <button
+                    type="button"
+                    onClick={() => set("endDate", "")}
                     className="text-xs text-slate-500 hover:text-slate-700 underline"
                   >
                     Xoá

@@ -17,8 +17,8 @@ export type EmploymentType = "VOLLZEIT" | "TEILZEIT" | "MINIJOB" | "AZUBI";
 /**
  * Bereich im Restaurant AnAn. Fehlt der Wert, ist die Person noch keinem Bereich
  * zugeordnet (der Admin trägt ihn nach) und zählt bei der Besetzung wie Service.
- * Fahrer (DRIVER) zählen nicht zur Besetzung im Laden und arbeiten nur 18–21 Uhr,
- * sonntags und an Feiertagen 18–22 Uhr (staffing.ts, DRIVER_HOURS).
+ * Fahrer (DRIVER) zählen nicht zur Besetzung im Laden und arbeiten nur im
+ * Fahrerfenster (staffing.ts, DRIVER_HOURS).
  */
 export type WorkRole = "KITCHEN" | "SERVICE" | "DRIVER";
 
@@ -64,6 +64,11 @@ export type Employee = {
    * als „zu wenig geplant" gemeldet zu werden. Fehlt = von Monatsanfang an dabei.
    */
   startDate?: string;
+  /**
+   * Letzter Arbeitstag (Austritt) als ISO-Datum. Tage DANACH sind gesperrt und
+   * zählen nicht ins Monats-Soll. Fehlt = bleibt.
+   */
+  endDate?: string;
   /**
    * Wochentage, an denen diese Person überhaupt eingeplant werden darf.
    * Fehlt/leer = jeder Tag ist möglich (keine Einschränkung).

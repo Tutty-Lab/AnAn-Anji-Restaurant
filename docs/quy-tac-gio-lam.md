@@ -31,17 +31,17 @@ Hai nhóm quy tắc: **(1) LUẬT** (không được vi phạm) và **(2) quy t�
 
 Restaurant AnAn:
 
-- **Giờ mở:** T2–T6 11:00–14:30 và 17:00–22:30 · T7 11:00–22:30 · CN và ngày lễ 12:00–22:30.
-- **Tối đa 9 giờ công/ngày** (quán yêu cầu, thấp hơn giới hạn luật 10h); app chặn cả khi xếp tự động lẫn khi sửa tay.
-- **Peak hour chủ yếu buổi tối**; ngày đông nhất **T6, T7, CN** (hệ số 1,5) – ưu tiên nhiều người buổi tối của 3 ngày này.
-- **Trong giờ mở luôn ít nhất 2 người trong quán**, gồm ít nhất 1 **bếp** và **2 phục vụ** (người chưa gán nhóm tính như phục vụ).
-- **Buổi trưa chỉ cần 2 nhân viên bếp.**
-- **Nhóm:** Bếp, Phục vụ, Lái xe – admin gán trong tab Nhân viên.
-- **Lái xe** chỉ làm **18:00–21:00**, **Chủ Nhật 18:00–22:00** (ngày lễ như Chủ Nhật); không tính vào số người trong quán; mỗi tối 1–2 lái xe.
-- **Toàn thời gian:** ưu tiên ca và giờ làm cố định (cùng thứ, cùng giờ mỗi tuần).
-- **Azubi:** 39 giờ/tuần; trong kỳ học không đi làm.
-- **Nhân viên còn lại** (bán thời gian, minijob, lái xe): ưu tiên làm vào peak hour.
-- **Hợp đồng theo tháng** (ví dụ 92,70h) xếp theo bậc 30′ và không vượt hợp đồng.
+- **Giờ mở**: T2–T6 11:00–14:30 và 17:00–22:30 · T7 11:00–22:30 · CN và ngày lễ 12:00–22:30.
+- **Giờ làm** bắt đầu sớm hơn 30′ (T2–T7 10:30, CN/lễ 11:30): **bếp chuẩn bị, đúng 1 người**. Phục vụ và lái xe làm từ giờ mở.
+- **Tối đa 9 giờ công/ngày**; app chặn cả khi xếp tự động lẫn khi sửa tay.
+- **Quy tắc cứng:** từ lúc mở đến lúc đóng cửa luôn có **ít nhất 1 phục vụ và 1 bếp**.
+- **Quy tắc mềm – Phục vụ (bồi):** T2–T4 sáng 2, chiều 2 · T5–CN sáng 2, chiều 3.
+- **Quy tắc mềm – Bếp:** 10:30 1 người · T2–CN sáng 2 · T5–T7 tối 3 (đông thì 4).
+- **Quy tắc mềm – Lái xe:** chủ yếu tối (18:00–21:00, CN/lễ 18:00–22:00): trong tuần 1 người, CN luôn 2. Giờ hợp đồng dư thì làm thêm buổi trưa.
+- Sáng = mở cửa – 14:30, chiều/tối = 17:00 – đóng cửa. T7/CN 14:30–17:00 chỉ áp dụng quy tắc cứng.
+- **Nhóm:** Bếp, Phục vụ, Lái xe – theo danh sách chủ quán, admin sửa trong tab Nhân viên. Azubi là nhóm Phục vụ.
+- **Toàn thời gian** (≥ 150h/tháng): ca và giờ làm cố định. **Bán thời gian:** ưu tiên giờ đông.
+- **Hợp đồng theo tháng** (giờ bảng lương) xếp theo bậc 30′, không vượt. Ngày vào làm / ngày thôi làm chặn các ngày ngoài hợp đồng.
 
 > Các quy tắc này là vận hành của quán, không phải luật — có thể chỉnh theo từng
 > cửa hàng (số người tối thiểu, khung giờ cao điểm, số ngày mở…). Khi đổi, nhớ

@@ -76,8 +76,8 @@ function weekdayFactor(weekday: WeekdayKey, workHours: WorkHoursConfig): number 
 
 /**
  * Faktor, nach dem der Vertrag einer Person auf Tage/Wochen verteilt wird.
- * Fahrer fahren jeden Abend im Fahrerfenster (Mo–Sa 3 h, So 4 h) – ihr Soll folgt
- * diesem Fenster, nicht Tagesgewicht × Öffnungsdauer. Sonst bekäme eine Randwoche
+ * Fahrer fahren vor allem in der Kernzeit am Abend (Mo–Sa 3 h, So 4 h) – ihr Soll
+ * folgt dieser Kernzeit, nicht Tagesgewicht × Öffnungsdauer. Sonst bekäme eine Randwoche
  * mit ruhigen Tagen zu wenig Fahrerstunden und ein Abend bliebe ohne Fahrer.
  */
 function contractFactor(emp: Employee, weekday: WeekdayKey, workHours: WorkHoursConfig): number {
@@ -256,6 +256,31 @@ export function monthlyBudgetMinutes(
       rest -= 1;
     }
   }
+  // Ein Wochenrest unter dem kürzesten Dienst (Fahrer 2 h, sonst 3 h) ließe sich
+  // nur als zu kurzer Dienst planen – z. B. 1,5 h Fahrt am Montag, dem 30.11.,
+  // der allein in seiner Randwoche liegt. Gemessen Okt 2026–Sep 2027 mit der
+  // Startbelegschaft: Fahrten unter 2 h 2 → 0, Dienste unter 3 h 16 → 0, Service
+  // unter 2 Personen 159 → 131 halbe Stunden. Nur Wegschieben (ohne Auffüllen)
+  // ließ dagegen die Randtage leer: Service 159 → 209.
+  const minSlots = Math.round((emp.workRole === "DRIVER" ? 120 : 180) / SCHEDULE_SLOT_MINUTES);
+  weeks.forEach((week, index) => {
+    if (week.slots === 0 || week.slots >= minSlots) return;
+    const others = [weeks[index - 1], weeks[index + 1]].filter((other): other is (typeof weeks)[number] => !!other);
+    // Zuerst auf einen ganzen Dienst AUFFÜLLEN (die Person bleibt am Randtag
+    // eingeplant), aus der Nachbarwoche mit dem meisten Polster.
+    const need = minSlots - week.slots;
+    const donor = others.filter((other) => other.slots - need >= minSlots).sort((a, b) => b.slots - a.slots)[0];
+    if (donor && week.cap >= minSlots) {
+      donor.slots -= need;
+      week.slots += need;
+      return;
+    }
+    const taker = others.filter((other) => other.slots > 0 && other.cap - other.slots >= week.slots)
+      .sort((a, b) => (b.cap - b.slots) - (a.cap - a.slots))[0];
+    if (!taker) return;
+    taker.slots += week.slots;
+    week.slots = 0;
+  });
   for (const week of weeks) result.set(week.weekStart, week.slots * SCHEDULE_SLOT_MINUTES);
   return result;
 }

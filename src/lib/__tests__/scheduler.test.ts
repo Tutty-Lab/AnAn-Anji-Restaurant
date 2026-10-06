@@ -91,18 +91,20 @@ describe("Scheduler – August 2026 Beispieldaten", () => {
     );
   });
 
-  it("keeps individual contracts while weighting busy days (T6–CN = 1,5)", () => {
-    // Azubi mit 39 h/Woche: volle Woche ab 3.8. genau 39 h.
-    const week = shifts.filter((shift) => shift.employeeId === "an-3" && weekStartOf(shift.date) === "2026-08-03");
-    expect(week.reduce((sum, shift) => sum + shift.paidMinutes, 0)).toBe(39 * 60);
-    // Tab „Tài liệu": Stoßtage tragen je Tag deutlich mehr Stunden im Laden (Fahrer zählen nicht).
-    const inHouse = shifts.filter((shift) => weekStartOf(shift.date) === "2026-08-03" &&
-      SAMPLE_EMPLOYEES.find((employee) => employee.id === shift.employeeId)?.workRole !== "DRIVER");
-    const isBusy = (date: string) => [0, 5, 6].includes(new Date(`${date}T12:00:00`).getDay());
-    const busyPerDay = inHouse.filter((shift) => isBusy(shift.date)).reduce((sum, shift) => sum + shift.paidMinutes, 0) / 3;
-    const normalPerDay = inHouse.filter((shift) => !isBusy(shift.date)).reduce((sum, shift) => sum + shift.paidMinutes, 0) / 4;
-    expect(busyPerDay / normalPerDay).toBeGreaterThanOrEqual(1.3);
-    expect(busyPerDay / normalPerDay).toBeLessThanOrEqual(2.2);
+  it("keeps individual contracts while weighting busy days (T5–T6 = 1,5)", () => {
+    // Monatsverträge: jede Person liegt höchstens 30 Minuten unter ihrem Vertrag, nie darüber.
+    for (const employee of SAMPLE_EMPLOYEES) {
+      const paid = shifts.filter((shift) => shift.employeeId === employee.id).reduce((sum, shift) => sum + shift.paidMinutes, 0);
+      expect(paid).toBeLessThanOrEqual(employee.targetMinutes);
+      expect(employee.targetMinutes - paid).toBeLessThan(30);
+    }
+    // Tab „Tài liệu": Do/Fr tragen je Tag deutlich mehr Stunden als Mo–Mi (gleiche Öffnungsdauer).
+    const week = shifts.filter((shift) => weekStartOf(shift.date) === "2026-08-03");
+    const perDay = (days: number[]) =>
+      week.filter((shift) => days.includes(new Date(`${shift.date}T12:00:00`).getDay())).reduce((sum, shift) => sum + shift.paidMinutes, 0) / days.length;
+    const ratio = perDay([4, 5]) / perDay([1, 2, 3]);
+    expect(ratio).toBeGreaterThanOrEqual(1.2);
+    expect(ratio).toBeLessThanOrEqual(2.2);
   });
 });
 

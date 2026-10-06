@@ -670,10 +670,13 @@ function shiftLines(shifts: Shift[], closed: boolean, withHours = false): string
 /**
  * Dienstplan-PDF für einen Zeitraum (eine Seite). Spaltenbreite, Schriftgröße
  * und Zeilenhöhe richten sich nach der Menge, damit alles auf das Blatt passt.
+ * into = vorhandenes Dokument: der Zeitraum kommt als neue Seite dazu (z. B. eine
+ * Seite je Woche in einer Datei).
  */
 export function buildDienstplanPdf(
   schedule: Schedule,
   opts: { dates: string[]; title: string; layout: SchedulePdfLayout; employeeIds?: string[] },
+  into?: jsPDF,
 ): jsPDF {
   const employees =
     opts.employeeIds && opts.employeeIds.length
@@ -692,12 +695,13 @@ export function buildDienstplanPdf(
   const closedOn = (date: string) => isDayClosed(schedule.workHours, date, holidays, overrides);
 
   const landscape = opts.layout === "byDate";
-  const doc = new jsPDF({
+  const doc = into ?? new jsPDF({
     unit: "mm",
     format: "a4",
     orientation: landscape ? "landscape" : "portrait",
     compress: true,
   });
+  if (into) into.addPage("a4", landscape ? "landscape" : "portrait");
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const startY = drawHeader(doc, "Dienstplan", schedule, opts.title);

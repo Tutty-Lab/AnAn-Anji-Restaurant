@@ -69,14 +69,17 @@ export function longestBlock(blocks: DayBlocks): number {
 
 const w = (start: number, end: number): DayWindow => ({ startMinutes: start, endMinutes: end });
 
-// Vorgabe des Betriebs (Restaurant AnAn), Öffnungszeiten – täglich geöffnet:
+// Vorgabe des Betriebs (Restaurant AnAn), Öffnungszeiten, täglich geöffnet:
 //   Montag–Freitag   11:00–14:30 UND 17:00–22:30  (zwei Blöcke, zu 14:30–17:00)
 //   Samstag          11:00–22:30 DURCHGEHEND
 //   Sonntag          12:00–22:30 DURCHGEHEND
-//   Feiertag         wie Sonntag (12:00–22:30)
-const MITTAGS_SPLIT: DayBlocks = [w(11 * 60, 14 * 60 + 30), w(17 * 60, 22 * 60 + 30)];
-const SAMSTAG: DayBlocks = [w(11 * 60, 22 * 60 + 30)];
-const SONNTAG: DayBlocks = [w(12 * 60, 22 * 60 + 30)];
+//   Feiertag         wie Sonntag
+// Die Arbeitszeit beginnt 30 Minuten VOR der Öffnung: dann bereitet 1 Person die
+// Küche vor (Vorgabe „Bếp 10:30 – 1 người"). In dieser halben Stunde arbeitet
+// nur die Küche (staffing.ts, PREP_MINUTES).
+const MITTAGS_SPLIT: DayBlocks = [w(10 * 60 + 30, 14 * 60 + 30), w(17 * 60, 22 * 60 + 30)];
+const SAMSTAG: DayBlocks = [w(10 * 60 + 30, 22 * 60 + 30)];
+const SONNTAG: DayBlocks = [w(11 * 60 + 30, 22 * 60 + 30)];
 
 export const DEFAULT_WORK_HOURS: WorkHoursConfig = {
   perWeekday: {

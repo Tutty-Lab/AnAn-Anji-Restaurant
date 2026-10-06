@@ -74,6 +74,9 @@ function underQuotaReason(emp: Employee | undefined, schedule: Schedule): string
   if (emp.startDate && emp.startDate.startsWith(prefix)) {
     parts.push(`vào làm từ ${shortDate(emp.startDate)} (các ngày trước không tính)`);
   }
+  if (emp.endDate && emp.endDate.startsWith(prefix)) {
+    parts.push(`thôi làm sau ${shortDate(emp.endDate)} (các ngày sau không tính)`);
+  }
   const monthEnd = `${prefix}31`;
   const school = (emp.schoolPeriods ?? []).filter((period) => period.start <= monthEnd && period.end >= `${prefix}01`);
   if (school.length > 0) {
