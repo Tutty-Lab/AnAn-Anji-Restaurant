@@ -195,3 +195,23 @@ describe("Speicher je Laden", () => {
     expect(loadState("anan")?.schedule.companyName).toBe("AnAn neu");
   });
 });
+
+describe("Bù giờ cho người làm hai quán (ca tối chạm giờ đóng cửa)", () => {
+  // Đội mẫu 12/2024 trong 10/2026 và 11/2026: Huy Nam ở Anji từng thiếu 2–6 h,
+  // vì ca tối 17:00–22:30 không kéo dài thêm được. Giờ thêm phần ca trưa.
+  it.each([[2026, 10], [2026, 11], [2024, 11]])("%i-%i: mọi người đủ giờ hợp đồng ở cả hai quán", (year, month) => {
+    const rosters: Record<string, Employee[]> = Object.fromEntries(
+      STORE_PROFILES.map((p) => [p.id, storeRoster(p.id, year === 2024 ? `2024-${month}` : "2024-12")]));
+    const planned: Record<string, Shift[]> = {};
+    planAcrossStores(STORE_PROFILES.map((profile) => ({
+      employees: rosters[profile.id],
+      plan: (blockedDays, daysPerWeekCap) => (planned[profile.id] = generateSchedule({
+        year, month, workHours: DEFAULT_WORK_HOURS, employees: rosters[profile.id], profile, blockedDays, daysPerWeekCap,
+      })),
+    })));
+    const short = STORE_PROFILES.flatMap((p) => rosters[p.id]
+      .map((e) => ({ who: `${p.shortName} ${e.name}`, gap: e.targetMinutes - planned[p.id].filter((s) => s.employeeId === e.id).reduce((a, s) => a + s.paidMinutes, 0) }))
+      .filter((x) => x.gap >= 30 || x.gap < 0));
+    expect(short).toEqual([]);
+  });
+});

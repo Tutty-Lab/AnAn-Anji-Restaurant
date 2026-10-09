@@ -664,7 +664,8 @@ function topUpShortfalls(result: Shift[], employees: Employee[], budgets: Map<st
     for (let round = 0; round < 60; round++) {
       const own = shifts.filter((shift) => shift.employeeId === employee.id);
       if (budgetTotal - paidOf(own) < SLOT) break;
-      let best: { old: Shift; next: Shift; delta: number } | undefined;
+      // old = null: ein zweiter Teildienst kommt an einem Tag dazu (siehe unten).
+      let best: { old: Shift | null; next: Shift; delta: number; shrink?: { old: Shift; next: Shift } } | undefined;
       for (const shift of own) {
         const day = ctx.days.get(shift.date);
         if (!day || day.closed) continue;
@@ -690,8 +691,55 @@ function topUpShortfalls(result: Shift[], employees: Employee[], budgets: Map<st
           if (!best || delta < best.delta) best = { old: shift, next, delta };
         }
       }
+      // Kein Dienst lässt sich verlängern (z. B. Abenddienst 17:00–22:30 stößt an den
+      // Schluss): an einem Tag mit zwei Blöcken einen Teildienst (3 h) im freien Block
+      // ergänzen – ein geteilter Dienst, höchstens 9 h am Tag. Nur Monatsverträge;
+      // Wochenverträge bleiben in ihrem Wochenbudget.
+      // Rest unter 3 h: der Teildienst bekommt trotzdem 3 h, die Differenz kommt von
+      // einem anderen Dienst derselben Person (der dabei mindestens 3 h behält).
+      const rest = Math.floor((budgetTotal - paidOf(own)) / SLOT) * SLOT;
+      const surplus = Math.max(0, MIN_SHIFT - rest);
+      const shrinkOptions = (date: string) => surplus === 0 ? [undefined] : own
+        .filter((shift) => shift.date !== date && shift.paidMinutes - surplus >= MIN_SHIFT)
+        .map((shift) => {
+          const weekday = effectiveWeekdayKey(shift.date, ctx.holidays);
+          const next = makeShift(employee.id, shift.date, shift.startMinutes, shift.paidMinutes - surplus, shift.shiftType === "EARLY" ? "EARLY" : "LATE", weekday, ctx.profile);
+          const day = ctx.days.get(shift.date)!;
+          const onDay = shifts.filter((x) => x.date === shift.date);
+          const ownDay = own.filter((x) => x.date === shift.date);
+          const swap = (list: Shift[]) => list.map((x) => (x === shift ? next : x));
+          const delta = dayCost(swap(onDay), day.blocks, weekday, ctx.dailyTargets.get(shift.date), ctx) + styleCostOf(employee, shift.date, weekday, swap(ownDay), ctx)
+            - dayCost(onDay, day.blocks, weekday, ctx.dailyTargets.get(shift.date), ctx) - styleCostOf(employee, shift.date, weekday, ownDay, ctx);
+          return { old: shift, next, delta };
+        });
+      if (!best && employee.weeklyHours == null && rest >= SLOT) {
+        for (const date of new Set(own.map((shift) => shift.date))) {
+          const day = ctx.days.get(date);
+          if (!day || day.closed || day.blocks.length < 2) continue;
+          const ownDay = own.filter((shift) => shift.date === date);
+          if (ownDay.length !== 1 || paidOf(ownDay) + MIN_SHIFT > MAX_PAID) continue;
+          const weekday = effectiveWeekdayKey(date, ctx.holidays);
+          const blocks = workBlocksFor(employee, day.blocks, weekday);
+          const free = blocks.filter((block) => ownDay[0].endMinutes <= block.startMinutes || ownDay[0].startMinutes >= block.endMinutes);
+          const others = shifts.filter((shift) => shift.date === date);
+          const before = dayCost(others, day.blocks, weekday, ctx.dailyTargets.get(date), ctx)
+            + styleCostOf(employee, date, weekday, ownDay, ctx);
+          for (const block of free) {
+            for (const start of startsInBlock(block, MIN_SHIFT)) {
+              const next = makeShift(employee.id, date, start, MIN_SHIFT, block.startMinutes < 16 * 60 ? "EARLY" : "LATE", weekday, ctx.profile);
+              const addDelta = dayCost([...others, next], day.blocks, weekday, ctx.dailyTargets.get(date), ctx)
+                + styleCostOf(employee, date, weekday, [...ownDay, next], ctx) - before;
+              for (const shrink of shrinkOptions(date)) {
+                const delta = addDelta + (shrink?.delta ?? 0);
+                if (!best || delta < best.delta) best = { old: null, next, delta, ...(shrink ? { shrink: { old: shrink.old, next: shrink.next } } : {}) };
+              }
+            }
+          }
+        }
+      }
       if (!best) break;
-      shifts = [...shifts.filter((s) => s !== best!.old), best.next];
+      const chosen = best;
+      shifts = [...shifts.filter((s) => s !== chosen.old && s !== chosen.shrink?.old), chosen.next, ...(chosen.shrink ? [chosen.shrink.next] : [])];
     }
   }
   return shifts;
