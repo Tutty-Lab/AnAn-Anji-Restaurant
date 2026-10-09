@@ -52,5 +52,6 @@ export function countsForContract(employee: Employee, isoDate: string): boolean 
  * oder die Berufsschule sprechen dagegen)
  */
 export function mayWorkOn(employee: Employee, isoDate: string): boolean {
-  return worksOnWeekday(employee, isoDate) && countsForContract(employee, isoDate);
+  return worksOnWeekday(employee, isoDate) && countsForContract(employee, isoDate) &&
+    !(employee.blockedDates?.includes(isoDate) ?? false);
 }

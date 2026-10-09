@@ -9,7 +9,6 @@
 
 import type { Employee, Shift } from "../types";
 import {
-  DAY_WEIGHTS,
   datesOfMonth,
   parseIsoDate,
   weekdayKeyOf,
@@ -22,7 +21,7 @@ import {
   type OverrideMap,
   type WorkHoursConfig,
 } from "./workHours";
-import { presentGroups, staffGroupOf, staffingWindows, staffRange, weightedDailyTargets, type StaffGroup } from "./staffing";
+import { ANAN_PROFILE, presentGroups, staffGroupOf, staffingWindows, staffRange, weightedDailyTargets, type StaffGroup, type StoreProfile } from "./staffing";
 import { weekStartOf } from "./weeks";
 import { mayWorkOn } from "./availability";
 
@@ -90,9 +89,12 @@ export type AnalyzeInput = {
   employees: Employee[];
   shifts: Shift[];
   holidays?: Set<string>;
+  /** Laden (Regeln, Gewichte); Standard: AnAn. */
+  profile?: StoreProfile;
 };
 
 export function analyzeSchedule(input: AnalyzeInput): ScheduleAnalysis {
+  const profile = input.profile ?? ANAN_PROFILE;
   const holidays = input.holidays ?? publicHolidays(input.year);
   const overrides = input.overrides ?? {};
   const dates = datesOfMonth(input.year, input.month);
@@ -123,7 +125,7 @@ export function analyzeSchedule(input: AnalyzeInput): ScheduleAnalysis {
     const hours = weekDates.reduce((sum, date) => sum + inHouseMinutes(byDate.get(date) ?? []), 0) / 60;
     const openMinutesOf = (value: string) => resolveDay(input.workHours, value, holidays, overrides).blocks
       .reduce((sum, block) => sum + (block.endMinutes - block.startMinutes), 0);
-    for (const [date, target] of weightedDailyTargets(weekDates, hours, (value) => effectiveWeekdayKey(value, holidays), openMinutesOf)) {
+    for (const [date, target] of weightedDailyTargets(weekDates, hours, (value) => effectiveWeekdayKey(value, holidays), openMinutesOf, profile.dayWeights)) {
       dailyTargets.set(date, target);
     }
   }
@@ -138,7 +140,7 @@ export function analyzeSchedule(input: AnalyzeInput): ScheduleAnalysis {
 
     const peaks: PeakCoverage[] = [];
     if (!day.closed) {
-      for (const peak of staffingWindows(day.blocks, effectiveWeekdayKey(date, holidays), present)) {
+      for (const peak of staffingWindows(day.blocks, effectiveWeekdayKey(date, holidays), present, profile)) {
         const from = peak.startMinutes;
         const to = peak.endMinutes;
         const { min: minStaff, max: maxStaff } = staffRange(
@@ -203,7 +205,7 @@ export function analyzeSchedule(input: AnalyzeInput): ScheduleAnalysis {
       deviation: avgTargetHours > 0 ? avgHours / avgTargetHours - 1 : 0,
     });
   }
-  weekdayFit.sort((a, b) => DAY_WEIGHTS[a.weekday] - DAY_WEIGHTS[b.weekday]);
+  weekdayFit.sort((a, b) => profile.dayWeights[a.weekday] - profile.dayWeights[b.weekday]);
 
   const lengthHistogram = new Map<number, number>();
   for (const s of input.shifts) {

@@ -1,12 +1,52 @@
-# Dienstplan & Stundenzettel — Restaurant AnAn
+# Dienstplan & Stundenzettel — Restaurant AnAn & Restaurant Anji
 
-Elvirastr. 12, 80636 München (Bayern). React-Anwendung für Wochenplanung
-innerhalb eines Monats und deutsche Stundenaufzeichnungen. Die Oberfläche ist
-auf Vietnamesisch. Erstellt aus
+Eine App für zwei Restaurants desselben Betriebs (Bayern). React-Anwendung für
+Wochenplanung innerhalb eines Monats und deutsche Stundenaufzeichnungen. Die
+Oberfläche ist auf Vietnamesisch. Erstellt aus
 [`template-studenzettell`](https://github.com/Tutty-Lab/template-studenzettell)
-(Remote `template`, damit spätere Korrekturen übernommen werden können).
+(Remote `template`); Aufbau mit mehreren Läden wie in
+[`Shin-Coco-Nieu-Restaurant`](https://github.com/Tutty-Lab/Shin-Coco-Nieu-Restaurant).
 
-## Arbeitszeit
+| Laden | `store_id` | Anschrift | Bereiche |
+|---|---|---|---|
+| Restaurant AnAn | `anan` | Elvirastr. 12, 80636 München | Bếp, Phục vụ, Lái xe |
+| Restaurant Anji | `anji` | (noch nicht angegeben) | Bếp, Bồi |
+
+## Ein Betrieb, zwei Läden
+
+- Jeder Laden hat eigene Mitarbeiter, eigene Pläne, ein eigenes Passwort, eine
+  eigene Zeile in Supabase (`store_data`) und einen eigenen LocalStorage-Schlüssel
+  (`stundenzettel-app:v1:<store_id>`; der alte AnAn-Schlüssel ohne Suffix wird
+  beim ersten Laden übernommen).
+- Monat und Jahr stehen oben in der Kopfzeile und gelten für beide Läden. Die
+  Reihe unter den Tabs wählt den angezeigten Laden. **„Tạo lịch"** plant beide.
+- Die App öffnet sich mit dem eigenen Passwort eines der beiden Läden; das
+  Startpasswort gilt nur, solange keiner ein eigenes gesetzt hat.
+- Alles, was die Läden unterscheidet (Besetzungsregeln, Tagesgewichte,
+  Nachfragekurve, Bezeichnungen, Bereiche), steht als `StoreProfile` in
+  `src/lib/staffing.ts` (`ANAN_PROFILE`, `ANJI_PROFILE`). Planer, Prüfung,
+  Độ phủ und Tab „Tài liệu" lesen nur das Profil.
+
+## Mitarbeiter in beiden Läden
+
+Thi Thuy Nhu, Huy Nam Nguyen und Hong Son Le stehen in beiden
+Lohnabrechnungen und tragen denselben `personKey` (`src/lib/stores.ts`). Neue
+Verbindungen setzt der Tab „Nhân viên" im Feld „Cũng làm ở quán khác"
+(`src/lib/sharedPerson.ts`, aus Shin-Coco-Nieu).
+
+- **Eine Person arbeitet an einem Tag nur in einem Laden.** „Tạo lịch" plant
+  AnAn, dann Anji (`planAcrossStores`); Tage aus AnAn sind in Anji gesperrt.
+- **Arbeitszeitgesetz für den Menschen:** höchstens 6 Tage am Stück und 6 Tage je
+  Woche, beide Läden zusammen. Der zuerst geplante Laden bekommt höchstens so
+  viele Tage je Woche, wie es dem Anteil seiner Vertragsstunden entspricht
+  (Huy Nam: AnAn 28,2 h von 202 h → 1 Tag/Woche).
+- Eine Hand-Änderung, die jemanden doppelt einplant oder über 6 Tage bringt,
+  meldet die App rot oben auf der Seite (`crossStoreConflicts`,
+  `crossStoreRunIssues`).
+- 10/2024: Hong Son Le steht mit je 173,81 h in beiden Abrechnungen (347,6 h) –
+  das geht nicht; beide Läden melden fehlende Stunden.
+
+## Arbeitszeit (beide Läden)
 
 Die Arbeitszeit beginnt 30 Minuten vor der Öffnung – dann bereitet 1 Person
 die Küche vor.
@@ -19,50 +59,41 @@ die Küche vor.
 
 ## Besetzung
 
-Die Regeln stehen an einer Stelle (`src/lib/staffing.ts`, `STAFFING_RULES`) und
-werden im Tab „Tài liệu" direkt daraus angezeigt.
-
-- **Bereiche:** Bếp (Küche), Phục vụ (Service/Bồi), Lái xe (Fahrer). Personen
-  ohne Bereich zählen wie Service, bis der Admin sie zuordnet.
-- **Hart:** von Öffnung bis Schluss immer mindestens 1 Bếp (ab Vorbereitung)
-  und 1 Phục vụ (ab Öffnung). Der Scheduler gewichtet harte Regeln zehnfach
+- **Hart (beide):** immer mindestens 1 Bếp (ab Vorbereitung) und 1 Phục vụ/Bồi
+  (ab Öffnung). Der Scheduler gewichtet harte Regeln zehnfach
   (`hardRuleFactor`); sie werden auch gemeldet, wenn ein Bereich keine Person hat.
-- **Weich:** Phục vụ Mo–Mi mittags 2 / abends 2, Do–So mittags 2 / abends 3.
-  Bếp Vorbereitung genau 1, mittags 2 (täglich), abends 3 (Do–Sa, gern 4).
-  Mittags = Öffnung–14:30, abends = 17:00–Schluss.
-- **Fahrer:** vor allem abends. Kernzeit 18:00–21:00 (So/Feiertag 18:00–22:00):
-  Mo–Sa 1 Fahrer, So 2. Fahrer zählen nicht zur Besetzung im Laden und dürfen in
-  allen Öffnungszeiten arbeiten – Stunden, die abends keinen Platz haben, gehen
-  in den Mittag (Vollzeitfahrer mit 173,81 h passen nicht in 3 h je Abend).
-- **Tagesgewichte:** Mo–Mi 1,0, Do 1,3, Fr/Sa 1,5, So 1,3.
+- **Weich AnAn:** Phục vụ Mo–Mi mittags 2 / abends 2, Do–So 2 / 3. Bếp
+  Vorbereitung 1, mittags 2, abends 3 (Do–Sa). Lái xe Kernzeit 18:00–21:00
+  (So/Feiertag 18:00–22:00): Mo–Sa 1, So 2; Fahrer dürfen in allen
+  Öffnungszeiten arbeiten.
+- **Weich Anji:** Bồi Mo–Mi mittags 3 / abends 3, Do–So 3 / 4. Bếp
+  Vorbereitung 1, mittags 3, abends 4 (Do–Sa).
+- Mittags = Öffnung–14:30, abends = 17:00–Schluss.
+- **Tagesgewichte:** AnAn Mo–Mi 1,0, Do 1,3, Fr/Sa 1,5, So 1,3 · Anji Mo–Mi 1,0,
+  Do/Fr 1,5, Sa 1,3, So 1,0.
 
-## Lohnabrechnung 06/2023–12/2024
+## Lohnabrechnung
 
-`src/lib/ananPayroll.ts` enthält die Anw.-Std. je Monat, Eintritt und Austritt
-sowie die Bereiche laut Angabe des Betriebs (`ANAN_ROLES`). Azubi bleibt Azubi,
-ab 150 h/Monat Vollzeit, über 50 h Teilzeit, sonst Minijob.
-`ananRoster("2024-12")` ist die Startbelegschaft der App. 12/2023 (keine
-Stunden) und 04/2024 (nur 1 Zeile) fehlen in der Abrechnung
-(`ANAN_MISSING_MONTHS`).
+`src/lib/ananPayroll.ts` (06/2023–12/2024) und `src/lib/anjiPayroll.ts`
+(05/2023–12/2024): Anw.-Std. je Monat, Ein- und Austritt, Bereiche und Azubi
+laut Liste des Betriebs. Ab 150 h/Monat Vollzeit. `storeRoster(id, "2024-12")`
+ist die Startbelegschaft je Laden.
 
-Alle Monate planen und prüfen:
+Alle Monate beider Läden planen und prüfen – genau wie „Tạo lịch":
 
 ```bash
-npx vite-node scripts/export-anan.mts output/anan
+npx vite-node scripts/export-all.mts output
 ```
 
-Ergebnis je Monat: `<Monat>_Dienstplan.pdf` (eine Seite je Woche),
-`<Monat>_Stundenzettel.pdf`, dazu `lich-tat-ca.csv` und `BAO-CAO.md`
-(harte/weiche Regeln, Arbeitszeitgesetz, Verträge).
+Ergebnis: `output/anan/` und `output/anji/` mit `<Monat>_Dienstplan.pdf` (eine
+Seite je Woche), `<Monat>_Stundenzettel.pdf`, `lich-tat-ca.csv`, `BAO-CAO.md`,
+dazu `output/NGUOI-LAM-2-QUAN.md` (Personen in beiden Läden).
 
 ## Verträge
 
 - **Monatsvertrag:** im 30-Minuten-Raster, nie überschritten (173,81 h → 173,5 h).
-- **Wochenvertrag** (z. B. Azubi 39 h/Woche) als harte Wochengrenze; in
-  eingetragenen Berufsschulzeiten kein Dienst.
 - **Eintritt / Austritt** (`startDate`, `endDate`): Tage davor bzw. danach sind
-  gesperrt. Die eingetragenen Stunden gelten für den restlichen Monat (wie in
-  der Lohnabrechnung).
+  gesperrt; die eingetragenen Stunden gelten für den restlichen Monat.
 - Vollzeit: feste Dienste je Wochentag. Teilzeit/Minijob: bevorzugt Stoßzeiten.
 - Höchstens 9 h bezahlte Arbeit je Tag, 6 Tage am Stück, 6 Tage je Woche.
   Pausen über 6 h 30 Minuten, über 8 h 60 Minuten.
@@ -79,7 +110,7 @@ npx vitest run
 npm run build
 ```
 
-Persistenz über LocalStorage und optional Supabase (`store_data`, Zeile
-`store_id = "anan"`), konfiguriert mit `VITE_SUPABASE_URL` und
-`VITE_SUPABASE_ANON_KEY`. Die Passwortsperre im Client ersetzt keine
-Zugriffskontrolle.
+Supabase: `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY` (oder die
+`NEXT_PUBLIC_*`-Namen der Vercel-Integration). `VITE_STORE_ID_PREFIX` (z. B.
+`test-`) lenkt lokal auf Testzeilen um. Die Passwortsperre im Client ersetzt
+keine Zugriffskontrolle.

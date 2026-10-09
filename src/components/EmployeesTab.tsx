@@ -4,7 +4,9 @@ import type { DateRange, Employee, EmploymentType, WorkRole } from "../types";
 import { splitTargetHours } from "../lib/splitTargetHours";
 import { WEEKDAY_SHORT_VI, type WeekdayKey } from "../lib/demand";
 import { monthlyTargetMinutesFor } from "../lib/contract";
-import { employmentLabelVi, employmentShortVi, roleLabelVi, WORK_ROLES } from "../lib/employment";
+import { employmentLabelVi, employmentShortVi, roleLabelVi } from "../lib/employment";
+import { currentPartners, linkPatches, type PartnerChoice, type StoreRoster } from "../lib/sharedPerson";
+import type { StoreProfile } from "../lib/staffing";
 import { minutesToShortHours, minutesToTime, timeToMinutes } from "../lib/time";
 import type { WorkHoursConfig } from "../lib/workHours";
 
@@ -72,9 +74,14 @@ type Draft = {
   maxDays: string;
   startDate: string; // "yyyy-MM-dd" hoặc "" = từ đầu tháng
   endDate: string; // "yyyy-MM-dd" hoặc "" = vẫn làm
+  /** Cùng người này ở quán khác: storeId -> employeeId ("" = không). */
+  partners: PartnerChoice;
 };
 
-function draftFrom(emp?: Employee): Draft {
+/** Der andere Laden, wie ihn das Feld „Cũng làm ở quán khác" braucht. */
+type OtherStore = { storeId: string; shortName: string; employees: readonly Employee[]; locked: boolean };
+
+function draftFrom(emp?: Employee, partners: PartnerChoice = {}): Draft {
   const weekly = emp?.weeklyHours != null;
   return {
     name: emp?.name ?? "",
@@ -91,6 +98,7 @@ function draftFrom(emp?: Employee): Draft {
     maxDays: emp?.maxDaysPerWeek ? String(emp.maxDaysPerWeek) : "",
     startDate: emp?.startDate ?? "",
     endDate: emp?.endDate ?? "",
+    partners,
   };
 }
 
@@ -163,9 +171,28 @@ function draftToEmployee(d: Draft): Omit<Employee, "id"> {
   };
 }
 
-export function EmployeesTab({ store }: { store: UseScheduleReturn }) {
-  const { schedule, openDates, addEmployee, updateEmployee, removeEmployee } = store;
+export function EmployeesTab({ store, allStores }: { store: UseScheduleReturn; allStores: readonly UseScheduleReturn[] }) {
+  const { schedule, openDates, addEmployee, updateEmployee, removeEmployee, profile } = store;
   const locked = Boolean(schedule.lockedAt);
+
+  const rosters: StoreRoster[] = allStores.map((s) => ({ storeId: s.storeId, employees: s.schedule.employees }));
+  const others: OtherStore[] = allStores
+    .filter((s) => s.storeId !== store.storeId)
+    .map((s) => ({
+      storeId: s.storeId,
+      shortName: s.profile.shortName,
+      employees: s.schedule.employees,
+      locked: Boolean(s.schedule.lockedAt),
+    }));
+  const partnerLabel = (emp: Employee) =>
+    others.filter((o) => currentPartners(rosters, store.storeId, emp)[o.storeId]).map((o) => o.shortName);
+
+  /** personKeys in beiden Läden setzen bzw. lösen. */
+  const saveLinks = (self: { employeeId: string; name: string; personKey?: string }, choice: PartnerChoice) => {
+    for (const patch of linkPatches(rosters, { storeId: store.storeId, ...self }, choice)) {
+      allStores.find((s) => s.storeId === patch.storeId)?.updateEmployee(patch.employeeId, { personKey: patch.personKey });
+    }
+  };
 
   // null = zu; "new" = anlegen; sonst = die id, die bearbeitet wird.
   const [offen, setOffen] = useState<null | "new" | string>(null);
@@ -181,7 +208,7 @@ export function EmployeesTab({ store }: { store: UseScheduleReturn }) {
     <section className="rounded-lg bg-white border border-slate-200 p-4 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-base font-semibold text-slate-900">
-          Nhân viên
+          Nhân viên {profile.shortName}
           {schedule.employees.length > 0 && (
             <span className="ml-2 text-sm font-normal text-slate-400">
               {schedule.employees.length}
@@ -218,7 +245,7 @@ export function EmployeesTab({ store }: { store: UseScheduleReturn }) {
                 onClick={() => setOffen(emp.id)}
                 className="w-full text-left rounded-lg border border-slate-200 p-3 flex items-center gap-3 hover:bg-slate-50 active:bg-slate-100 transition-colors"
               >
-                <EmployeeSummaryRow emp={emp} openDates={openDates} workHours={schedule.workHours} />
+                <EmployeeSummaryRow emp={emp} openDates={openDates} workHours={schedule.workHours} profile={profile} sharedWith={partnerLabel(emp)} />
                 <span className="text-slate-300 text-lg leading-none">›</span>
               </button>
             </li>
@@ -242,10 +269,18 @@ export function EmployeesTab({ store }: { store: UseScheduleReturn }) {
           employee={bearbeitet}
           openDates={openDates}
           workHours={schedule.workHours}
+          profile={profile}
+          others={others}
+          partners={currentPartners(rosters, store.storeId, bearbeitet)}
           onClose={() => setOffen(null)}
-          onSave={(felder) => {
-            if (bearbeitet) updateEmployee(bearbeitet.id, felder);
-            else addEmployee(felder);
+          onSave={(felder, partners) => {
+            if (bearbeitet) {
+              updateEmployee(bearbeitet.id, felder);
+              saveLinks({ employeeId: bearbeitet.id, name: felder.name, personKey: bearbeitet.personKey }, partners);
+            } else {
+              const id = addEmployee(felder);
+              if (id) saveLinks({ employeeId: id, name: felder.name }, partners);
+            }
             setOffen(null);
           }}
           onDelete={
@@ -267,10 +302,14 @@ function EmployeeSummaryRow({
   emp,
   openDates,
   workHours,
+  profile,
+  sharedWith,
 }: {
   emp: Employee;
   openDates: readonly string[];
   workHours: WorkHoursConfig;
+  profile: StoreProfile;
+  sharedWith: string[];
 }) {
   const monatMin = monthlyTargetMinutesFor(emp, openDates, workHours);
   const monatH = monatMin / 60;
@@ -289,8 +328,13 @@ function EmployeeSummaryRow({
           {employmentShortVi(emp.employmentType)}
         </span>
         <span className={`shrink-0 rounded text-[11px] px-1.5 py-0.5 ${ROLE_BADGE[emp.workRole ?? "NONE"]}`}>
-          {roleLabelVi(emp.workRole)}
+          {roleLabelVi(emp.workRole, profile)}
         </span>
+        {sharedWith.length > 0 && (
+          <span className="shrink-0 rounded bg-fuchsia-50 text-fuchsia-700 text-[11px] px-1.5 py-0.5">
+            cũng làm ở {sharedWith.join(", ")}
+          </span>
+        )}
       </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
         <span>
@@ -323,6 +367,9 @@ function EmployeeSheet({
   employee,
   openDates,
   workHours,
+  profile,
+  others,
+  partners,
   onClose,
   onSave,
   onDelete,
@@ -330,11 +377,14 @@ function EmployeeSheet({
   employee?: Employee;
   openDates: readonly string[];
   workHours: WorkHoursConfig;
+  profile: StoreProfile;
+  others: readonly OtherStore[];
+  partners: PartnerChoice;
   onClose: () => void;
-  onSave: (felder: Omit<Employee, "id">) => void;
+  onSave: (felder: Omit<Employee, "id">, partners: PartnerChoice) => void;
   onDelete?: () => void;
 }) {
-  const [d, setD] = useState<Draft>(() => draftFrom(employee));
+  const [d, setD] = useState<Draft>(() => draftFrom(employee, partners));
   const [loeschFrage, setLoeschFrage] = useState(false);
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) =>
@@ -410,8 +460,8 @@ function EmployeeSheet({
                 onChange={(e) => set("role", e.target.value as WorkRole | "")}
               >
                 <option value="">{roleLabelVi(undefined)}</option>
-                {WORK_ROLES.map((role) => (
-                  <option key={role} value={role}>{roleLabelVi(role)}</option>
+                {profile.workRoles.map((role) => (
+                  <option key={role} value={role}>{roleLabelVi(role, profile)}</option>
                 ))}
               </select>
             </label>
@@ -637,6 +687,35 @@ function EmployeeSheet({
           </div>
             </div>
           </details>
+
+          {/* Cùng một người ở quán kia – tạo lịch không xếp hai quán trong cùng một ngày. */}
+          {others.length > 0 && (
+            <div className="border-t border-slate-100 pt-3 space-y-2">
+              <div className="text-xs font-semibold text-slate-700">Cũng làm ở quán khác</div>
+              <p className="text-xs text-slate-400">
+                Chọn đúng người này trong danh sách quán kia. Khi tạo lịch, người này không bị xếp hai quán trong cùng một ngày.
+              </p>
+              {others.map((o) => (
+                <label key={o.storeId} className="flex items-center gap-2 text-sm text-slate-700">
+                  <span className="w-14 shrink-0 text-xs font-medium text-slate-600">{o.shortName}</span>
+                  <select
+                    className={`${inputClass} flex-1 min-w-0`}
+                    value={d.partners[o.storeId] ?? ""}
+                    disabled={o.locked}
+                    onChange={(e) => set("partners", { ...d.partners, [o.storeId]: e.target.value })}
+                  >
+                    <option value="">— không —</option>
+                    {o.employees.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                  {o.locked && <span className="text-xs text-amber-700">đang khoá</span>}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="sticky bottom-0 bg-white border-t border-slate-200 px-4 py-3">
@@ -678,7 +757,7 @@ function EmployeeSheet({
                   Huỷ
                 </button>
                 <button
-                  onClick={() => onSave(draftToEmployee(d))}
+                  onClick={() => onSave(draftToEmployee(d), d.partners)}
                   className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
                 >
                   Lưu

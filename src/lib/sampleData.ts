@@ -4,7 +4,7 @@
 
 import type { Employee, Schedule, WorkRole } from "../types";
 import { DEFAULT_WORK_HOURS } from "./workHours";
-import { COMPANY_ADDRESS, COMPANY_NAME } from "./company";
+import { ANAN_PROFILE } from "./staffing";
 import { ananRoster } from "./ananPayroll";
 
 export function makeEmployee(
@@ -40,30 +40,17 @@ export function makeWeekly(
 
 /**
  * Belegschaft Restaurant AnAn: letzter Monat der Lohnabrechnung (12/2024),
- * Bereiche laut Angabe des Betriebs (ananPayroll.ts, ANAN_ROLES).
+ * Bereiche laut Angabe des Betriebs (ananPayroll.ts, ANAN_ROLES). Startstand der
+ * App je Laden: stores.ts (initialScheduleFor).
  */
 export const SAMPLE_EMPLOYEES: Employee[] = ananRoster("2024-12");
 
 export function createSampleSchedule(): Schedule {
   return {
-    companyName: COMPANY_NAME,
-    address: COMPANY_ADDRESS,
+    companyName: ANAN_PROFILE.name,
+    address: ANAN_PROFILE.address,
     year: 2026,
     month: 8, // August
-    workHours: structuredClone(DEFAULT_WORK_HOURS),
-    dateOverrides: [],
-    employees: SAMPLE_EMPLOYEES.map((e) => ({ ...e })),
-    shifts: [],
-  };
-}
-
-/** Startbelegschaft, die die App beim allerersten Öffnen zeigt (Oktober 2026). */
-export function createInitialSchedule(): Schedule {
-  return {
-    companyName: COMPANY_NAME,
-    address: COMPANY_ADDRESS,
-    year: 2026,
-    month: 10,
     workHours: structuredClone(DEFAULT_WORK_HOURS),
     dateOverrides: [],
     employees: SAMPLE_EMPLOYEES.map((e) => ({ ...e })),

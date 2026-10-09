@@ -22,7 +22,7 @@ git push
 
 - [ ] `npx tsc -b` — **sạch, 0 lỗi**.
 - [ ] `npx vitest run` — **tất cả test pass**.
-      Số test hiện tại của bản này: **97** _(Restaurant AnAn, 12 file; đảm bảo
+      Số test hiện tại của bản này: **124** _(Restaurant AnAn + Anji, 14 file; đảm bảo
       không giảm sau thay đổi của mình)._
 - [ ] **Không còn file test tạm** trong `src/lib/__tests__/` (ví dụ `_probe`,
       `_audit`, `_headcount`, `_min`, `scratch_*`…). Kiểm nhanh:

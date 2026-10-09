@@ -13,22 +13,7 @@ export type WeekdayKey =
   | "saturday"
   | "sunday";
 
-/**
- * Nachfrage-Gewichte je Wochentag (keine Mitarbeiterzahlen!).
- *
- * Restaurant AnAn: am stärksten Do–So, vor allem abends (Besetzungsvorgabe
- * staffing.ts: Service abends Do–So 3 statt 2, Küche abends Do–Sa 3). Fr/Sa 1,5,
- * Do/So 1,3, Mo–Mi 1,0.
- */
-export const DAY_WEIGHTS: Record<WeekdayKey, number> = {
-  monday: 1.0,
-  tuesday: 1.0,
-  wednesday: 1.0,
-  thursday: 1.3,
-  friday: 1.5,
-  saturday: 1.5,
-  sunday: 1.3,
-};
+// Tagesgewichte stehen je Laden in staffing.ts (StoreProfile.dayWeights).
 
 /** date-fns getDay(): 0=So ... 6=Sa  ->  WeekdayKey. */
 const WEEKDAY_BY_GETDAY: Record<number, WeekdayKey> = {

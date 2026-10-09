@@ -70,6 +70,17 @@ export type Employee = {
    */
   endDate?: string;
   /**
+   * Dieselbe Person in einem anderen Laden (AnAn ↔ Anji): gleicher Schlüssel =
+   * ein Mensch. „Tạo lịch" plant sie nie am selben Tag in zwei Läden.
+   * "" = Verbindung bewusst gelöst.
+   */
+  personKey?: string;
+  /**
+   * NUR während der Planung gesetzt (nie gespeichert): Tage, an denen die Person
+   * schon in einem anderen Laden arbeitet.
+   */
+  blockedDates?: readonly string[];
+  /**
    * Wochentage, an denen diese Person überhaupt eingeplant werden darf.
    * Fehlt/leer = jeder Tag ist möglich (keine Einschränkung).
    */

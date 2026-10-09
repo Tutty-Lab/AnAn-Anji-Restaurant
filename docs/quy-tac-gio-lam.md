@@ -20,7 +20,7 @@ Hai nhóm quy tắc: **(1) LUẬT** (không được vi phạm) và **(2) quy t�
 > toán/luật.
 
 ### Suy ra cho thuật toán (phải luôn đúng)
-- Không xếp ai **> 10h/ngày** (giới hạn luật; từng quán có thể chặn thấp hơn – AnAn chặn **9 giờ công/ngày**, xem mục 2).
+- Không xếp ai **> 10h/ngày** (giới hạn luật; từng quán có thể chặn thấp hơn – AnAn và Anji chặn **9 giờ công/ngày**, xem mục 2).
 - Không xếp ai **> 6 ngày liên tiếp** (phải chèn ngày nghỉ).
 - **Pause** tự tính theo ngưỡng 6h/8h và **trừ khỏi giờ trả lương**.
 - Khoảng cách hai ca của cùng người **≥ 11h**.
@@ -42,6 +42,19 @@ Restaurant AnAn:
 - **Nhóm:** Bếp, Phục vụ, Lái xe – theo danh sách chủ quán, admin sửa trong tab Nhân viên. Azubi là nhóm Phục vụ.
 - **Toàn thời gian** (≥ 150h/tháng): ca và giờ làm cố định. **Bán thời gian:** ưu tiên giờ đông.
 - **Hợp đồng theo tháng** (giờ bảng lương) xếp theo bậc 30′, không vượt. Ngày vào làm / ngày thôi làm chặn các ngày ngoài hợp đồng.
+
+Restaurant Anji (cùng app, cùng giờ mở và giờ làm như AnAn):
+
+- **Quy tắc cứng:** luôn có **ít nhất 1 bồi và 1 bếp**.
+- **Quy tắc mềm – Bồi:** T2–T4 sáng 3, chiều 3 · T5–CN sáng 3, chiều 4.
+- **Quy tắc mềm – Bếp:** 10:30 1 người · T2–CN sáng 3 · T5–T7 tối 4.
+- **Nhóm:** Bếp, Bồi (không có lái xe). Ha Phuong Nguyen, Quang Tien La, Tien Viet Pham là Azubi làm bồi.
+
+Người làm cả hai quán (Thi Thuy Nhu, Huy Nam Nguyen, Hong Son Le – nối ở mục „Cũng làm ở quán khác"):
+
+- **Mỗi ngày chỉ làm ở một quán.** Tạo lịch xếp AnAn trước, Anji vào những ngày còn trống.
+- **Luật ngày nghỉ tính cả hai quán:** ≤ 6 ngày liên tiếp, ≤ 6 ngày/tuần. Quán xếp trước chỉ dùng số ngày/tuần theo tỉ lệ giờ hợp đồng ở hai quán.
+- Sửa tay làm trùng ngày hoặc vượt 6 ngày → app báo đỏ ở đầu trang.
 
 > Các quy tắc này là vận hành của quán, không phải luật — có thể chỉnh theo từng
 > cửa hàng (số người tối thiểu, khung giờ cao điểm, số ngày mở…). Khi đổi, nhớ

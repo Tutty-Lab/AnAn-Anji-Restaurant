@@ -171,7 +171,7 @@ export function ScheduleDayView({
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{emp.name}</div>
                   <div className="text-xs opacity-80">
-                    {employmentLabelVi(emp.employmentType)} · {roleLabelVi(emp.workRole)} ·{" "}
+                    {employmentLabelVi(emp.employmentType)} · {roleLabelVi(emp.workRole, store.profile)} ·{" "}
                     {own.length > 1
                       ? `Ca gãy · ${minutesToShortHours(paid)}`
                       : first.shiftType === "EARLY"

@@ -11,6 +11,7 @@ import { guestBlocks, staffGroupOf, validPause } from "./staffing";
 import { mayWorkOn } from "./availability";
 import { publicHolidays } from "./holidays";
 import { resolveDay, type WorkHoursConfig } from "./workHours";
+import type { WeekdayKey } from "./demand";
 
 export type ValidationError = {
   employeeId?: string;
@@ -68,13 +69,15 @@ export function validateSchedule(
   openDays?: number | readonly string[],
   /** Wochenplan des Ladens – gleicher Faktor für das Monats-Soll wie im Scheduler. */
   workHours?: WorkHoursConfig,
+  /** Tagesgewichte des Ladens (Wochenverträge); Standard: AnAn. */
+  weights?: Record<WeekdayKey, number>,
 ): ValidationResult {
   const errors: ValidationError[] = [];
   const sollOf = (e: Employee): number => {
     if (openDays == null) return e.targetMinutes;
     return typeof openDays === "number"
       ? monthlyTargetMinutes(e, openDays)
-      : monthlyTargetMinutesFor(e, openDays, workHours);
+      : monthlyTargetMinutesFor(e, openDays, workHours, weights);
   };
   const employeeById = new Map(employees.map((e) => [e.id, e] as const));
   const holidaysByYear = new Map<number, Set<string>>();

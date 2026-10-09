@@ -4,6 +4,7 @@
 // ============================================================================
 
 import type { EmploymentType, WorkRole } from "../types";
+import { ANAN_PROFILE, type StoreProfile } from "./staffing";
 
 /** Volle Bezeichnung in der App-Sprache (Vietnamesisch). */
 export function employmentLabelVi(type: EmploymentType): string {
@@ -47,18 +48,10 @@ export function employmentLabelDe(type: EmploymentType): string {
   }
 }
 
-export const WORK_ROLES: readonly WorkRole[] = ["KITCHEN", "SERVICE", "DRIVER"];
-
-/** Bereich in der App-Sprache; undefined = noch nicht zugeordnet. */
-export function roleLabelVi(role: WorkRole | undefined): string {
-  switch (role) {
-    case "KITCHEN":
-      return "Bếp";
-    case "SERVICE":
-      return "Phục vụ";
-    case "DRIVER":
-      return "Lái xe";
-    default:
-      return "Chưa gán";
-  }
+/**
+ * Bereich in der App-Sprache; undefined = noch nicht zugeordnet. Die Wörter
+ * kommen aus dem Laden (Service heißt bei AnAn „Phục vụ", bei Anji „Bồi").
+ */
+export function roleLabelVi(role: WorkRole | undefined, profile: StoreProfile = ANAN_PROFILE): string {
+  return role ? profile.groupLabels[role] : "Chưa gán";
 }

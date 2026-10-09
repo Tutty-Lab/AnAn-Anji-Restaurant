@@ -17,6 +17,7 @@
 // ============================================================================
 
 import { loadState } from "./storage";
+import { STORE_PROFILES } from "./staffing";
 
 /** Gilt, solange die Filiale kein eigenes Passwort gesetzt hat. */
 export const DEFAULT_PASSWORD = "1991";
@@ -60,7 +61,12 @@ export function isAuthenticated(): boolean {
  * LocalStorage; die App schreibt ihn dort bei jeder Änderung mit.
  */
 export async function login(password: string): Promise<boolean> {
-  const ok = await passwordMatches(password, loadState()?.passwordHash);
+  // Eine App für AnAn und Anji: das eigene Passwort eines der beiden Läden öffnet
+  // sie. Das Startpasswort gilt nur, solange KEIN Laden ein eigenes gesetzt hat –
+  // sonst hebelte der Laden ohne eigenes Passwort das des anderen aus.
+  const hashes = STORE_PROFILES.map((profile) => loadState(profile.id)?.passwordHash).filter((hash): hash is string => !!hash);
+  let ok = hashes.length === 0 ? await passwordMatches(password) : false;
+  for (const hash of hashes) if (await passwordMatches(password, hash)) ok = true;
   if (!ok) return false;
   try {
     localStorage.setItem(AUTH_KEY, "ok");

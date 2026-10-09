@@ -1,5 +1,5 @@
-import type { Employee, Shift } from "../types";
-import { DAY_WEIGHTS, type WeekdayKey } from "./demand";
+import type { Employee, Shift, WorkRole } from "../types";
+import type { WeekdayKey } from "./demand";
 import type { DayBlocks, DayWindow } from "./workHours";
 
 // ── Nhóm nhân viên ──────────────────────────────────────────────────────────
@@ -12,7 +12,6 @@ export type StaffGroup = "KITCHEN" | "SERVICE" | "DRIVER";
 export const STAFF_GROUPS: readonly StaffGroup[] = ["KITCHEN", "SERVICE", "DRIVER"];
 /** Personen im Laden (Bếp + Phục vụ). Fahrer sind unterwegs und zählen nicht mit. */
 export const IN_HOUSE: readonly StaffGroup[] = ["KITCHEN", "SERVICE"];
-export const GROUP_LABEL_VI: Record<StaffGroup, string> = { KITCHEN: "Bếp", SERVICE: "Phục vụ", DRIVER: "Lái xe" };
 
 export function staffGroupOf(employee: Employee | undefined): StaffGroup {
   if (employee?.workRole === "KITCHEN") return "KITCHEN";
@@ -138,7 +137,7 @@ const evening = clip(EVENING_START, 24 * 60);
 // sáng 2 (T2–CN), tối 3 (T5–T7, đông thì 4). „Sáng" = Öffnung–14:30,
 // „chiều/tối" = 17:00–Schluss. Sa/So/Feiertag (durchgehend) gilt 14:30–17:00 nur
 // die harte Regel. Lái xe: trong tuần 1 người mỗi tối, CN (và lễ) luôn 2.
-export const STAFFING_RULES: readonly StaffingRule[] = [
+const ANAN_RULES: readonly StaffingRule[] = [
   { label: "Bếp luôn có người", when: "suốt giờ làm (gồm 30′ chuẩn bị)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["KITCHEN"], windows: wholeBlocks },
   { label: "Phục vụ luôn có người", when: "suốt giờ mở cửa (gồm người chưa gán nhóm)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["SERVICE"], windows: (blocks) => guestBlocks(blocks) },
   { label: "Bếp chuẩn bị", when: "30′ trước giờ mở (T2–T7 10:30, CN/lễ 11:30)", minStaff: 1, maxStaff: 1, scaled: false, hard: false, groups: ["KITCHEN"], windows: prepWindow },
@@ -157,9 +156,25 @@ export const STAFFING_RULES: readonly StaffingRule[] = [
   },
 ];
 
+// Restaurant Anji (Vorgabe des Betriebs).
+// Hart: immer mindestens 1 Bồi (Service) und 1 Bếp (Küche) – die Küche ab der
+// Vorbereitung, der Service ab Öffnung.
+// Weich: Bồi T2–T4 sáng 3 / chiều 3, T5–CN sáng 3 / chiều 4; Bếp 10:30 1 người,
+// sáng 3 (T2–CN), tối 4 (T5–T7). Keine Fahrer.
+const ANJI_RULES: readonly StaffingRule[] = [
+  { label: "Bếp luôn có người", when: "suốt giờ làm (gồm 30′ chuẩn bị)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["KITCHEN"], windows: wholeBlocks },
+  { label: "Bồi luôn có người", when: "suốt giờ mở cửa (gồm người chưa gán nhóm)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["SERVICE"], windows: (blocks) => guestBlocks(blocks) },
+  { label: "Bếp chuẩn bị", when: "30′ trước giờ mở (T2–T7 10:30, CN/lễ 11:30)", minStaff: 1, maxStaff: 1, scaled: false, hard: false, groups: ["KITCHEN"], windows: prepWindow },
+  { label: "Bồi sáng", when: "mở cửa – 14:30", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], windows: lunch },
+  { label: "Bồi chiều T2–T4", when: "17:00 – đóng cửa", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: MON_WED, windows: evening },
+  { label: "Bồi chiều T5–CN", when: "17:00 – đóng cửa", minStaff: 4, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: THU_SUN, windows: evening },
+  { label: "Bếp sáng", when: "mở cửa – 14:30", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], windows: lunch },
+  { label: "Bếp tối T5–T7", when: "17:00 – đóng cửa", minStaff: 4, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], weekdays: THU_SAT, windows: evening },
+];
+
 /** Mindest-/Höchstzahl einer Regel an einem Wochentag (Gewicht angewandt, aufgerundet). */
-export function ruleRange(rule: StaffingRule, weekday: WeekdayKey): { minStaff: number; maxStaff: number } {
-  const weight = rule.scaled ? DAY_WEIGHTS[weekday] : 1;
+export function ruleRange(rule: StaffingRule, weekday: WeekdayKey, profile: StoreProfile = ANAN_PROFILE): { minStaff: number; maxStaff: number } {
+  const weight = rule.scaled ? profile.dayWeights[weekday] : 1;
   return {
     minStaff: Math.ceil(rule.minStaff * weight),
     maxStaff: Number.isFinite(rule.maxStaff) ? Math.ceil(rule.maxStaff * weight) : Infinity,
@@ -173,14 +188,19 @@ export function ruleAppliesOn(rule: StaffingRule, weekday: WeekdayKey): boolean 
 /**
  * Besetzungsfenster eines Tages. present = vorhandene Bereiche: eine WEICHE Regel
  * für einen Bereich ohne Personen wird übersprungen, statt jeden Tag als
- * unerfüllbar rot zu melden. Harte Regeln (AnAn: immer 1 Bếp, 1 Phục vụ) gelten
+ * unerfüllbar rot zu melden. Harte Regeln (immer 1 Bếp, 1 Phục vụ/Bồi) gelten
  * immer – fehlt der Bereich, ist das eine echte Lücke.
  */
-export function staffingWindows(blocks: DayBlocks, weekday: WeekdayKey, present?: ReadonlySet<StaffGroup>): StaffingWindow[] {
-  return STAFFING_RULES
+export function staffingWindows(
+  blocks: DayBlocks,
+  weekday: WeekdayKey,
+  present?: ReadonlySet<StaffGroup>,
+  profile: StoreProfile = ANAN_PROFILE,
+): StaffingWindow[] {
+  return profile.staffingRules
     .filter((rule) => ruleAppliesOn(rule, weekday) && (rule.hard || !present || rule.groups.some((group) => present.has(group))))
     .flatMap((rule) => {
-      const range = ruleRange(rule, weekday);
+      const range = ruleRange(rule, weekday, profile);
       return rule.windows(blocks).map((window) => ({ label: rule.label, groups: rule.groups, hard: rule.hard, ...window, ...range }));
     });
 }
@@ -192,8 +212,7 @@ export function staffingWindows(blocks: DayBlocks, weekday: WeekdayKey, present?
  * hệ số ngày) theo đường này thành số người mục tiêu cho từng 30 phút, rồi phạt
  * độ lệch theo bình phương – nhờ vậy số người lên xuống mượt, không dồn cục.
  *
- * AnAn: theo số người quy định – trưa 2 phục vụ + 2 bếp, chiều 14:30–17:00 (T7, CN)
- * chỉ 1 + 1, tối 3–6 người (T5–T7 nhiều nhất). 30′ chuẩn bị chỉ 1 người bếp.
+ * Mức trưa/chiều theo từng quán (StoreProfile.demand). 30′ chuẩn bị chỉ 1 người bếp.
  */
 export type DemandBand = { startMinutes: number; endMinutes: number; level: number; label: string };
 
@@ -205,9 +224,7 @@ const band = (from: string, to: string, level: number, label: string): DemandBan
 /** Höchster Wert der Kurve – Maßstab für „liegt in der Stoßzeit". */
 export const PEAK_LEVEL = 1.5;
 
-const AFTERNOON: readonly DemandBand[] = [
-  band("14:30", "17:00", 0.45, "Chiều vắng (chỉ 1 phục vụ + 1 bếp)"),
-];
+export type DemandProfile = { default: readonly DemandBand[]; sunday: readonly DemandBand[] };
 
 const EVENING: readonly DemandBand[] = [
   band("17:00", "17:30", 1.1, "Mở ca tối"),
@@ -218,30 +235,89 @@ const EVENING: readonly DemandBand[] = [
   band("21:30", "22:30", 1.25, "Đóng cửa"),
 ];
 
-export const DEMAND_PROFILE: { default: readonly DemandBand[]; sunday: readonly DemandBand[] } = {
-  // T2–T7. 14:30–17:00 chỉ dùng ở T7 (mở liền); T2–T6 đóng giờ đó.
-  default: [
-    band("10:30", "11:00", 0.2, "Bếp chuẩn bị"),
-    band("11:00", "14:30", 1.0, "Trưa"),
-    ...AFTERNOON,
-    ...EVENING,
-  ],
-  // CN và ngày lễ mở từ 12:00, bếp chuẩn bị từ 11:30.
-  sunday: [
-    band("11:30", "12:00", 0.2, "Bếp chuẩn bị"),
-    band("12:00", "14:30", 1.0, "Trưa"),
-    ...AFTERNOON,
-    ...EVENING,
-  ],
+/** Đường nhu cầu: trưa = lunch, chiều 14:30–17:00 (T7, CN mở liền) = afternoon. */
+function demandProfile(lunch: number, afternoon: number, afternoonLabel: string): DemandProfile {
+  const AFTERNOON = [band("14:30", "17:00", afternoon, afternoonLabel)];
+  return {
+    // T2–T7. 14:30–17:00 chỉ dùng ở T7 (mở liền); T2–T6 đóng giờ đó.
+    default: [band("10:30", "11:00", 0.2, "Bếp chuẩn bị"), band("11:00", "14:30", lunch, "Trưa"), ...AFTERNOON, ...EVENING],
+    // CN và ngày lễ mở từ 12:00, bếp chuẩn bị từ 11:30.
+    sunday: [band("11:30", "12:00", 0.2, "Bếp chuẩn bị"), band("12:00", "14:30", lunch, "Trưa"), ...AFTERNOON, ...EVENING],
+  };
+}
+
+// ── Hồ sơ quán ──────────────────────────────────────────────────────────────
+/**
+ * Alles, was AnAn und Anji unterscheidet, an EINER Stelle: Besetzungsregeln,
+ * Tagesgewichte, Nachfragekurve, Bezeichnungen und wählbare Bereiche.
+ * Öffnungszeiten, Gesetz und Planer sind für beide gleich. Die Funktionen hier
+ * und in weeklyScheduler/analyze/contract bekommen das Profil als Parameter
+ * (Standard: AnAn – so laufen ältere Aufrufe und Tests unverändert).
+ */
+export type StoreProfile = {
+  /** Schlüssel der Zeile in store_data und im LocalStorage – NICHT ändern. */
+  id: string;
+  name: string;
+  shortName: string;
+  address: string;
+  dayWeights: Record<WeekdayKey, number>;
+  staffingRules: readonly StaffingRule[];
+  demand: DemandProfile;
+  groupLabels: Record<StaffGroup, string>;
+  /** Im Tab Nhân viên wählbare Bereiche. */
+  workRoles: readonly WorkRole[];
 };
 
-export function demandProfileOf(weekday: WeekdayKey): readonly DemandBand[] {
-  return weekday === "sunday" ? DEMAND_PROFILE.sunday : DEMAND_PROFILE.default;
+export const ANAN_PROFILE: StoreProfile = {
+  id: "anan",
+  name: "Restaurant AnAn",
+  shortName: "AnAn",
+  address: "Elvirastr. 12, 80636 München",
+  // Am stärksten Do–So, vor allem abends: Service abends Do–So 3 statt 2,
+  // Küche abends Do–Sa 3. Fr/Sa 1,5, Do/So 1,3, Mo–Mi 1,0.
+  dayWeights: { monday: 1.0, tuesday: 1.0, wednesday: 1.0, thursday: 1.3, friday: 1.5, saturday: 1.5, sunday: 1.3 },
+  staffingRules: ANAN_RULES,
+  // Trưa 2 phục vụ + 2 bếp, chiều (T7, CN) 1 + 1, tối 3–6 người.
+  demand: demandProfile(1.0, 0.45, "Chiều vắng (chỉ 1 phục vụ + 1 bếp)"),
+  groupLabels: { KITCHEN: "Bếp", SERVICE: "Phục vụ", DRIVER: "Lái xe" },
+  workRoles: ["KITCHEN", "SERVICE", "DRIVER"],
+};
+
+export const ANJI_PROFILE: StoreProfile = {
+  id: "anji",
+  name: "Restaurant Anji",
+  shortName: "Anji",
+  // Anschrift vom Betrieb noch nicht angegeben.
+  address: "",
+  // Personenstunden je Öffnungsstunde laut Besetzungsvorgabe: Mo–Mi ≈ 4,8,
+  // Do–Fr ≈ 7,3, Sa ≈ 6,1, So ≈ 4,6 – auf Mo = 1,0 normiert.
+  dayWeights: { monday: 1.0, tuesday: 1.0, wednesday: 1.0, thursday: 1.5, friday: 1.5, saturday: 1.3, sunday: 1.0 },
+  staffingRules: ANJI_RULES,
+  // Trưa 3 bồi + 3 bếp, chiều (T7, CN) 1 + 1, tối 6–8 người.
+  demand: demandProfile(1.1, 0.35, "Chiều vắng (chỉ 1 bồi + 1 bếp)"),
+  groupLabels: { KITCHEN: "Bếp", SERVICE: "Bồi", DRIVER: "Lái xe" },
+  workRoles: ["KITCHEN", "SERVICE"],
+};
+
+/** Alle Läden dieser App, in der Reihenfolge, in der „Tạo lịch" sie plant. */
+export const STORE_PROFILES: readonly StoreProfile[] = [ANAN_PROFILE, ANJI_PROFILE];
+
+export function profileById(id: string): StoreProfile {
+  return STORE_PROFILES.find((profile) => profile.id === id) ?? ANAN_PROFILE;
+}
+
+/** Bezeichnung eines Bereichs im Laden (Service heißt bei Anji „Bồi"). */
+export function groupLabel(group: StaffGroup, profile: StoreProfile = ANAN_PROFILE): string {
+  return profile.groupLabels[group];
+}
+
+export function demandProfileOf(weekday: WeekdayKey, profile: StoreProfile = ANAN_PROFILE): readonly DemandBand[] {
+  return weekday === "sunday" ? profile.demand.sunday : profile.demand.default;
 }
 
 /** Relative workload at a minute (1 outside all bands). */
-export function workloadAt(minute: number, weekday: WeekdayKey): number {
-  return demandProfileOf(weekday).find((b) => minute >= b.startMinutes && minute < b.endMinutes)?.level ?? 1;
+export function workloadAt(minute: number, weekday: WeekdayKey, profile: StoreProfile = ANAN_PROFILE): number {
+  return demandProfileOf(weekday, profile).find((b) => minute >= b.startMinutes && minute < b.endMinutes)?.level ?? 1;
 }
 
 /**
@@ -249,11 +325,17 @@ export function workloadAt(minute: number, weekday: WeekdayKey): number {
  *   mục tiêu = giờ công của ngày × mức nhu cầu ÷ tổng mức cả ngày (tính theo phút).
  * Trả về [phút bắt đầu, số người mục tiêu].
  */
-export function slotTargets(blocks: DayBlocks, weekday: WeekdayKey, targetHours: number, slot = 30): [number, number][] {
+export function slotTargets(
+  blocks: DayBlocks,
+  weekday: WeekdayKey,
+  targetHours: number,
+  slot = 30,
+  profile: StoreProfile = ANAN_PROFILE,
+): [number, number][] {
   const slots: [number, number][] = [];
   for (const block of blocks) {
     for (let minute = block.startMinutes; minute < block.endMinutes; minute += slot) {
-      slots.push([minute, workloadAt(minute, weekday)]);
+      slots.push([minute, workloadAt(minute, weekday, profile)]);
     }
   }
   const levelMinutes = slots.reduce((sum, [, level]) => sum + level * slot, 0);
@@ -297,8 +379,9 @@ export function weightedDailyTargets(
   total: number,
   weekdayOf: (date: string) => WeekdayKey,
   openMinutesOf?: (date: string) => number,
+  weights: Record<WeekdayKey, number> = ANAN_PROFILE.dayWeights,
 ): Map<string, number> {
-  const factor = (date: string) => DAY_WEIGHTS[weekdayOf(date)] * (openMinutesOf ? openMinutesOf(date) : 1);
+  const factor = (date: string) => weights[weekdayOf(date)] * (openMinutesOf ? openMinutesOf(date) : 1);
   const sum = dates.reduce((acc, date) => acc + factor(date), 0);
   return new Map(dates.map((date) => [date, sum > 0 ? total * factor(date) / sum : 0]));
 }

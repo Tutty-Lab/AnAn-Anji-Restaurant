@@ -1,21 +1,17 @@
 // ============================================================================
-// Verbindung zur gemeinsamen Supabase-Datenbank. Alle Filialen (je ein Repo,
-// je eine Domain) hängen an derselben Datenbank; getrennt wird nur über
-// STORE_ID – deshalb steht die ID hier fest im Code der jeweiligen Filiale.
+// Verbindung zur gemeinsamen Supabase-Datenbank. Alle Filialen hängen an
+// derselben Datenbank; getrennt wird über store_id = id des Ladens
+// (staffing.ts, StoreProfile.id: "anan", "anji").
 // ============================================================================
 
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * Kennung dieser Filiale = Schlüssel der Zeile in store_data.
- *
- * Restaurant AnAn: eigene Zeile "anan". Alle Filialen teilen dieselbe
- * Datenbank – eine fremde ID würde deren Dienstpläne überschreiben.
- *
- * Per VITE_STORE_ID überschreibbar, damit man lokal gegen eine Testzeile
- * arbeiten kann.
+ * Präfix vor der Laden-ID, z. B. "test-" => Zeilen "test-anan" und "test-anji".
+ * Nur zum lokalen Arbeiten gegen Testzeilen – in Produktion leer. Eine fremde
+ * ID würde die Dienstpläne eines anderen Betriebs überschreiben.
  */
-export const STORE_ID = import.meta.env.VITE_STORE_ID || "anan";
+export const STORE_ID_PREFIX: string = import.meta.env.VITE_STORE_ID_PREFIX || "";
 
 // Beide Schreibweisen akzeptieren: VITE_* (selbst gesetzt) und NEXT_PUBLIC_*
 // (so legt die Vercel-Supabase-Integration die öffentlichen Schlüssel an).

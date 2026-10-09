@@ -1,5 +1,5 @@
 import type { Employee, Shift } from "../types";
-import { DAY_WEIGHTS, datesOfMonth, parseIsoDate, weekdayKeyOf, type WeekdayKey } from "./demand";
+import { datesOfMonth, parseIsoDate, weekdayKeyOf, type WeekdayKey } from "./demand";
 import { monthlyBudgetMinutes, weeklyBudgetMinutes } from "./contract";
 import { calculatePause } from "./time";
 import { mayWorkOn } from "./availability";
@@ -8,6 +8,7 @@ import { effectiveWeekdayKey, resolveDay, type DayBlocks, type DayWindow, type O
 import { publicHolidays } from "./holidays";
 import { weekStartOf } from "./weeks";
 import {
+  ANAN_PROFILE,
   CLOSING_START,
   PEAK_LEVEL,
   STAFF_GROUPS,
@@ -22,6 +23,7 @@ import {
   workBlocksFor,
   workloadAt,
   type StaffGroup,
+  type StoreProfile,
 } from "./staffing";
 
 type WeeklyInput = {
@@ -31,6 +33,12 @@ type WeeklyInput = {
   overrides?: OverrideMap;
   employees: Employee[];
   holidays?: Set<string>;
+  /** Besetzungsregeln, Gewichte und Nachfrage des Ladens (Standard: AnAn). */
+  profile?: StoreProfile;
+  /** Tage je Mitarbeiter-id, an denen die Person schon in einem anderen Laden arbeitet. */
+  blockedDays?: Record<string, readonly string[]>;
+  /** Höchstens so viele Tage je Woche in DIESEM Laden (gemeinsame Leute, sharedPerson.ts). */
+  daysPerWeekCap?: Record<string, number>;
 };
 type Option = { shifts: Shift[]; styleCost: number };
 type Choice = { date: string; paid: number; option: Option };
@@ -48,6 +56,8 @@ type Ctx = {
   fullWeekDays: number;
   /** Vollzeit: festes Muster je Wochentag -> Signatur der Dienste. */
   patterns: Map<string, Map<WeekdayKey, string>>;
+  profile: StoreProfile;
+  maxDayWeight: number;
 };
 
 const SLOT = 30;
@@ -141,7 +151,6 @@ export const SCHEDULER_TUNING = {
   weekShortCost: 300000,
 };
 
-const MAX_DAY_WEIGHT = Math.max(...Object.values(DAY_WEIGHTS));
 const GROUP_INDEX: Record<StaffGroup, number> = { KITCHEN: 0, SERVICE: 1, DRIVER: 2 };
 const groupMask = (groups: readonly StaffGroup[]) => groups.reduce((mask, group) => mask | (1 << GROUP_INDEX[group]), 0);
 const DRIVER_MASK = groupMask(["DRIVER"]);
@@ -193,7 +202,8 @@ function makeShift(
   startMinutes: number,
   paidMinutes: number,
   shiftType: "EARLY" | "LATE",
-  effectiveWeekday?: WeekdayKey,
+  effectiveWeekday: WeekdayKey | undefined,
+  profile: StoreProfile,
 ): Shift {
   const pauseMinutes = calculatePause(paidMinutes);
   const endMinutes = startMinutes + paidMinutes + pauseMinutes;
@@ -202,7 +212,7 @@ function makeShift(
   // improveCoverage later moves pauses by the REAL headcount of the day.
   const pauseStartMinutes = pauseMinutes > 0 ? pauseStartCandidates(startMinutes, endMinutes, pauseMinutes).sort((a, b) => {
     const score = (start: number) => Array.from({ length: pauseMinutes / SLOT }, (_, index) => start + index * SLOT)
-      .reduce((sum, minute) => sum + workloadAt(minute, weekday) + (minute >= CLOSING_START ? 100 : 0), 0);
+      .reduce((sum, minute) => sum + workloadAt(minute, weekday, profile) + (minute >= CLOSING_START ? 100 : 0), 0);
     return score(a) - score(b) || ((a / SLOT + hash(employeeId)) % 7) - ((b / SLOT + hash(employeeId)) % 7);
   })[0] : undefined;
   return {
@@ -241,10 +251,10 @@ function styleCostOf(employee: Employee, date: string, weekday: WeekdayKey, shif
       for (let minute = shift.startMinutes; minute < shift.endMinutes; minute += SLOT) {
         if (!workingAt(shift, minute)) continue;
         paidSlots++;
-        cost += (PEAK_LEVEL - workloadAt(minute, weekday)) * SCHEDULER_TUNING.peakSlotCost;
+        cost += (PEAK_LEVEL - workloadAt(minute, weekday, ctx.profile)) * SCHEDULER_TUNING.peakSlotCost;
       }
     }
-    cost += (MAX_DAY_WEIGHT - DAY_WEIGHTS[weekday]) * paidSlots * SCHEDULER_TUNING.peakDayCost;
+    cost += (ctx.maxDayWeight - ctx.profile.dayWeights[weekday]) * paidSlots * SCHEDULER_TUNING.peakDayCost;
   }
   if (staffGroupOf(employee) === "DRIVER") {
     // Am liebsten die ganze Kernzeit am Abend; ein Dienst nur mittags deckt sie
@@ -280,12 +290,12 @@ function optionsFor(
   const add =(shifts: Shift[]) => options.push({ shifts, styleCost: styleCostOf(employee, date, weekday, shifts, ctx) });
   const options: Option[] = [];
   if (employee.fixedShift) {
-    if (fixedPaid(employee.fixedShift) === paid) add([makeShift(employee.id, date, employee.fixedShift.startMinutes, paid, "EARLY", weekday)]);
+    if (fixedPaid(employee.fixedShift) === paid) add([makeShift(employee.id, date, employee.fixedShift.startMinutes, paid, "EARLY", weekday, ctx.profile)]);
     return options;
   }
   const placements = (block: DayWindow, duration: number, early: boolean): Shift[] =>
     startsInBlock(block, duration + calculatePause(duration))
-      .map((start) => makeShift(employee.id, date, start, duration, early ? "EARLY" : "LATE", weekday));
+      .map((start) => makeShift(employee.id, date, start, duration, early ? "EARLY" : "LATE", weekday, ctx.profile));
 
   blocks.forEach((block, index) => {
     for (const shift of placements(block, paid, index === 0 && block.startMinutes < 16 * 60)) add([shift]);
@@ -319,14 +329,14 @@ type DayModel = {
   windows: { slots: number[]; overlap: number[]; minStaff: number; maxStaff: number; mask: number; hard: boolean }[];
 };
 const dayModelCache = new Map<string, DayModel>();
-function dayModel(blocks: DayBlocks, weekday: WeekdayKey, targetHours: number, present: ReadonlySet<StaffGroup>): DayModel {
+function dayModel(blocks: DayBlocks, weekday: WeekdayKey, targetHours: number, present: ReadonlySet<StaffGroup>, profile: StoreProfile): DayModel {
   const presentKey = STAFF_GROUPS.filter((group) => present.has(group)).join("");
-  const key = `${weekday}|${presentKey}|${blocks.map((b) => `${b.startMinutes}-${b.endMinutes}`).join(",")}|${targetHours.toFixed(4)}`;
+  const key = `${profile.id}|${weekday}|${presentKey}|${blocks.map((b) => `${b.startMinutes}-${b.endMinutes}`).join(",")}|${targetHours.toFixed(4)}`;
   const cached = dayModelCache.get(key);
   if (cached) return cached;
-  const slotList = slotTargets(blocks, weekday, targetHours, SLOT);
+  const slotList = slotTargets(blocks, weekday, targetHours, SLOT, profile);
   const minutes = slotList.map(([minute]) => minute);
-  const windows = staffingWindows(blocks, weekday, present).map((window) => {
+  const windows = staffingWindows(blocks, weekday, present, profile).map((window) => {
     const slots: number[] = [];
     const overlap: number[] = [];
     minutes.forEach((minute, index) => {
@@ -350,7 +360,7 @@ function dayModel(blocks: DayBlocks, weekday: WeekdayKey, targetHours: number, p
  */
 function dayCost(shifts: Shift[], blocks: DayBlocks, weekday: WeekdayKey, targetHours: number | undefined, ctx: Ctx): number {
   if (blocks.length === 0) return 0;
-  const model = dayModel(blocks, weekday, targetHours ?? 0, ctx.present);
+  const model = dayModel(blocks, weekday, targetHours ?? 0, ctx.present, ctx.profile);
   const n = model.minutes.length;
   const counts = [new Array<number>(n).fill(0), new Array<number>(n).fill(0), new Array<number>(n).fill(0)];
   let paid = 0;
@@ -395,7 +405,10 @@ function chooseWeek(
 ): Choice[] {
   const { days, holidays, dailyTargets } = ctx;
   const eligible = dates.filter((date) => mayWorkOn(employee, date));
-  const limit = Math.min(dayLimit(employee), eligible.length);
+  // Tage im anderen Laden zählen für „höchstens 6 Tage je Woche" mit.
+  const week = dates.length > 0 ? weekStartOf(dates[0]) : "";
+  const elsewhere = (employee.blockedDates ?? []).filter((date) => weekStartOf(date) === week).length;
+  const limit = Math.min(dayLimit(employee) - elsewhere, eligible.length);
   if (target <= 0 || limit <= 0) return [];
   const fixed = employee.fixedShift ? fixedPaid(employee.fixedShift) : 0;
   if (employee.fixedShift && fixed === 0) return [];
@@ -414,7 +427,11 @@ function chooseWeek(
       ? [target]
       : Array.from({ length: Math.floor((Math.min(MAX_PAID, target) - minShift) / SLOT) + 1 }, (_, i) => minShift + i * SLOT);
 
-  const worked = new Set(existing.filter((shift) => shift.employeeId === employee.id).map((shift) => shift.date));
+  // Eigene Tage UND Tage im anderen Laden: „höchstens 6 Tage am Stück" gilt für den Menschen.
+  const worked = new Set([
+    ...existing.filter((shift) => shift.employeeId === employee.id).map((shift) => shift.date),
+    ...(employee.blockedDates ?? []),
+  ]);
   const validMasks = new Map<number, boolean>();
   const valid = (mask: number) => {
     const cached = validMasks.get(mask);
@@ -433,7 +450,7 @@ function chooseWeek(
   // Ideale Dienstlänge je Tag folgt demselben Faktor wie das Tagesziel
   // (Gewicht × Öffnungsdauer, Tab „Tài liệu") – bei gleicher Wochensumme.
   const factorOf = (date: string) =>
-    DAY_WEIGHTS[effectiveWeekdayKey(date, holidays)] * openMinutesOfBlocks(days.get(date)!.blocks);
+    ctx.profile.dayWeights[effectiveWeekdayKey(date, holidays)] * openMinutesOfBlocks(days.get(date)!.blocks);
   const averageFactor = eligible.reduce((sum, date) => sum + factorOf(date), 0) / eligible.length;
   const partialWeek = dates.length < ctx.fullWeekDays;
 
@@ -620,7 +637,7 @@ function topUpShortfalls(result: Shift[], employees: Employee[], budgets: Map<st
           const end = start + presence;
           if (!blocks.some((block) => start >= block.startMinutes && end <= block.endMinutes)) continue;
           if (sameDayOwn.some((s) => s.startMinutes < end && start < s.endMinutes)) continue;
-          const next = makeShift(employee.id, shift.date, start, paid, shift.shiftType === "EARLY" ? "EARLY" : "LATE", weekday);
+          const next = makeShift(employee.id, shift.date, start, paid, shift.shiftType === "EARLY" ? "EARLY" : "LATE", weekday, ctx.profile);
           const delta = dayCost([...others, next], day.blocks, weekday, ctx.dailyTargets.get(shift.date), ctx)
             + styleCostOf(employee, shift.date, weekday, [...sameDayOwn, next], ctx) - before;
           if (!best || delta < best.delta) best = { old: shift, next, delta };
@@ -652,7 +669,7 @@ function moveWorkDays(result: Shift[], employees: Employee[], ctx: Ctx): Shift[]
     const day = ctx.days.get(date)!;
     const onDay = shifts.filter((s) => s.date === date);
     const out = new Set<StaffGroup>();
-    for (const window of staffingWindows(day.blocks, weekdayOf(date), ctx.present)) {
+    for (const window of staffingWindows(day.blocks, weekdayOf(date), ctx.present, ctx.profile)) {
       const staff = onDay.filter((s) => window.groups.includes(ctx.groupOf.get(s.employeeId) ?? "SERVICE"));
       if (staffRange(staff, window.startMinutes, window.endMinutes).min < window.minStaff) {
         for (const group of window.groups) out.add(group);
@@ -678,7 +695,7 @@ function moveWorkDays(result: Shift[], employees: Employee[], ctx: Ctx): Shift[]
         const partialWeek = openDates.filter((d) => weekStartOf(d) === week).length < ctx.fullWeekDays;
         for (const from of ownDates) {
           if (weekStartOf(from) !== week) continue;
-          const dates = new Set(ownDates);
+          const dates = new Set([...ownDates, ...(employee.blockedDates ?? [])]);
           dates.delete(from);
           dates.add(to);
           if (maxConsecutiveRun(dates) > 6) continue;
@@ -737,7 +754,7 @@ function rebalanceWithinWeeks(result: Shift[], employees: Employee[], ctx: Ctx):
         const end = start + presence;
         if (!blocks.some((block) => start >= block.startMinutes && end <= block.endMinutes)) continue;
         if (sameDayOwn.some((s) => s.startMinutes < end && start < s.endMinutes)) continue;
-        variants.push(makeShift(employee.id, shift.date, start, paid, shift.shiftType === "EARLY" ? "EARLY" : "LATE", weekday));
+        variants.push(makeShift(employee.id, shift.date, start, paid, shift.shiftType === "EARLY" ? "EARLY" : "LATE", weekday, ctx.profile));
       }
       return variants;
     };
@@ -798,7 +815,22 @@ function planningRank(employee: Employee): number {
   return 3;
 }
 
-export function generateWeeklySchedule(input: WeeklyInput, existing: Shift[] = []): Shift[] {
+export function generateWeeklySchedule(rawInput: WeeklyInput, existing: Shift[] = []): Shift[] {
+  const profile = rawInput.profile ?? ANAN_PROFILE;
+  // Tage, an denen jemand schon in einem anderen Laden arbeitet, sind hier gesperrt
+  // (availability.ts, mayWorkOn). Nur auf Kopien – gespeichert wird das nie.
+  const blocked = rawInput.blockedDays ?? {};
+  const caps = rawInput.daysPerWeekCap ?? {};
+  const input: WeeklyInput = {
+    ...rawInput,
+    employees: rawInput.employees.map((employee) => {
+      let copy = employee;
+      if (blocked[employee.id]?.length) copy = { ...copy, blockedDates: blocked[employee.id] };
+      const cap = caps[employee.id];
+      if (cap != null) copy = { ...copy, maxDaysPerWeek: Math.min(copy.maxDaysPerWeek ?? 6, cap) };
+      return copy;
+    }),
+  };
   const holidays = input.holidays ?? publicHolidays(input.year);
   const days = new Map(datesOfMonth(input.year, input.month).map((date) => [
     date, resolveDay(input.workHours, date, holidays, input.overrides ?? {}),
@@ -841,8 +873,8 @@ export function generateWeeklySchedule(input: WeeklyInput, existing: Shift[] = [
   const budgets = new Map(employees.map((employee) => [
     employee.id,
     employee.weeklyHours != null
-      ? weeklyBudgetMinutes(employee, openDates, monthBounds, input.workHours)
-      : monthlyBudgetMinutes(employee, openDates, input.workHours),
+      ? weeklyBudgetMinutes(employee, openDates, monthBounds, input.workHours, profile.dayWeights)
+      : monthlyBudgetMinutes(employee, openDates, input.workHours, profile.dayWeights),
   ] as const));
   const groupOf = new Map(input.employees.map((employee) => [employee.id, staffGroupOf(employee)] as const));
   const ctx: Ctx = {
@@ -853,6 +885,8 @@ export function generateWeeklySchedule(input: WeeklyInput, existing: Shift[] = [
     present: presentGroups(input.employees),
     fullWeekDays,
     patterns: new Map(),
+    profile,
+    maxDayWeight: Math.max(...Object.values(profile.dayWeights)),
   };
   const isInHouse = (employeeId: string) => groupOf.get(employeeId) !== "DRIVER";
 
@@ -864,6 +898,7 @@ export function generateWeeklySchedule(input: WeeklyInput, existing: Shift[] = [
       total,
       (date) => effectiveWeekdayKey(date, holidays),
       (date) => openMinutesOfBlocks(days.get(date)!.blocks),
+      profile.dayWeights,
     );
     for (const [date, hours] of targets) ctx.dailyTargets.set(date, hours);
   };

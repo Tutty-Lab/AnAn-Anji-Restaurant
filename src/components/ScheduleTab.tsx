@@ -289,7 +289,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
       ) : view === "day" ? (
         <ScheduleDayView store={store} onEdit={(employeeId, date) => setSelected({ employeeId, date })} />
       ) : view === "coverage" ? (
-        <CoverageChart schedule={schedule} dates={weeks[Math.min(weekIndex, weeks.length - 1)]?.dates ?? dates} />
+        <CoverageChart schedule={schedule} profile={store.profile} dates={weeks[Math.min(weekIndex, weeks.length - 1)]?.dates ?? dates} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white -mx-3 sm:mx-0">
           <table className="border-collapse text-xs">
@@ -351,7 +351,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
                     </td>
                     <td className="border-b border-slate-100 px-2 py-1 text-slate-500 whitespace-nowrap">
                       {employmentShortVi(emp.employmentType)}
-                      <span className="block text-[10px] text-slate-400">{roleLabelVi(emp.workRole)}</span>
+                      <span className="block text-[10px] text-slate-400">{roleLabelVi(emp.workRole, store.profile)}</span>
                     </td>
                     <td className="border-b border-slate-100 px-2 py-1 text-right text-slate-500">
                       {minutesToShortHours(sollMin)}
@@ -425,7 +425,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
               <SummaryRow label="Số nhân viên" dates={gridDates} value={(d) => String(dayStats.get(d)!.people.size)} />
               <SummaryRow label="Số ca" dates={gridDates} value={(d) => String(dayStats.get(d)!.shifts)} />
               <SummaryRow label="Bếp" labelClass="text-orange-700" dates={gridDates} value={(d) => String(dayStats.get(d)!.kitchen.size)} />
-              <SummaryRow label="Phục vụ (bồi)" labelClass="text-sky-700" dates={gridDates} value={(d) => String(dayStats.get(d)!.service.size)} />
+              <SummaryRow label={store.profile.groupLabels.SERVICE} labelClass="text-sky-700" dates={gridDates} value={(d) => String(dayStats.get(d)!.service.size)} />
               {hasDrivers && (
                 <SummaryRow label="Lái xe" labelClass="text-violet-700" dates={gridDates} value={(d) => String(dayStats.get(d)!.driver.size)} />
               )}

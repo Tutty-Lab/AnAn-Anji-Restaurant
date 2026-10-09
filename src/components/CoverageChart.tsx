@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { Schedule, Shift } from "../types";
 import { parseIsoDate, WEEKDAY_SHORT_VI, weekdayKeyOf } from "../lib/demand";
 import { publicHolidayNames, publicHolidays } from "../lib/holidays";
-import { GROUP_LABEL_VI, IN_HOUSE, presentGroups, staffGroupOf, staffingWindows, staffRange, validPause, type StaffGroup } from "../lib/staffing";
+import { ANAN_PROFILE, IN_HOUSE, presentGroups, staffGroupOf, staffingWindows, staffRange, validPause, type StaffGroup, type StoreProfile } from "../lib/staffing";
 import { effectiveWeekdayKey, resolveDay } from "../lib/workHours";
 import { minutesToTime } from "../lib/time";
 
@@ -14,7 +14,7 @@ type GroupSlot = { working: number; names: string[]; pausing: string[] };
 type Slot = {
   from: number;
   to: number;
-  /** Người trong quán (Bếp + Phục vụ). */
+  /** Người trong quán (Bếp + Phục vụ/Bồi). */
   actual: number;
   byGroup: Record<StaffGroup, GroupSlot>;
   required: number;
@@ -54,7 +54,8 @@ function slotBackground(slot: Slot): string {
 
 const fmtRange = (min: number, max: number) => `${min}${Number.isFinite(max) ? (max === min ? "" : `–${max}`) : "+"}`;
 
-export function CoverageChart({ schedule, dates }: { schedule: Schedule; dates: string[] }) {
+export function CoverageChart({ schedule, dates, profile = ANAN_PROFILE }: { schedule: Schedule; dates: string[]; profile?: StoreProfile }) {
+  const GROUP_LABEL_VI = profile.groupLabels;
   const holidayNames = useMemo(() => publicHolidayNames(schedule.year), [schedule.year]);
   const present = useMemo(() => presentGroups(schedule.employees), [schedule.employees]);
   const rows = useMemo(() => {
@@ -69,7 +70,7 @@ export function CoverageChart({ schedule, dates }: { schedule: Schedule; dates: 
       const shifts = schedule.shifts.filter((shift) => shift.date === date);
       const ofGroups = (groups: readonly StaffGroup[]) => shifts.filter((shift) => groups.includes(groupOf(shift)));
       // Ngày lễ mở cửa được xếp như Chủ nhật – khung yêu cầu theo CN.
-      const windows = staffingWindows(day.blocks, effectiveWeekdayKey(date, holidays), present);
+      const windows = staffingWindows(day.blocks, effectiveWeekdayKey(date, holidays), present, profile);
       const slots: Slot[] = [];
       for (let from = day.window.startMinutes; from < day.window.endMinutes; from += SLOT) {
         const to = Math.min(from + SLOT, day.window.endMinutes);
@@ -124,7 +125,7 @@ export function CoverageChart({ schedule, dates }: { schedule: Schedule; dates: 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
         <span className="font-semibold text-slate-800">Mỗi cột = 30 phút</span>
         <span className="inline-flex items-center gap-1.5"><span className={`h-3 w-3 ${GROUP_COLOR.KITCHEN.swatch}`} /> Bếp</span>
-        <span className="inline-flex items-center gap-1.5"><span className={`h-3 w-3 ${GROUP_COLOR.SERVICE.swatch}`} /> Phục vụ (gồm chưa gán)</span>
+        <span className="inline-flex items-center gap-1.5"><span className={`h-3 w-3 ${GROUP_COLOR.SERVICE.swatch}`} /> {GROUP_LABEL_VI.SERVICE} (gồm chưa gán)</span>
         {present.has("DRIVER") && (
           <span className="inline-flex items-center gap-1.5"><span className={`h-3 w-1.5 ${GROUP_COLOR.DRIVER.swatch}`} /> Lái xe (không tính vào quán)</span>
         )}

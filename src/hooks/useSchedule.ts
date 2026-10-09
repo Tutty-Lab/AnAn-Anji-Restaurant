@@ -1,6 +1,7 @@
 // ============================================================================
-// Zentrales State-Management (ohne externe Bibliothek). Kapselt Schedule,
-// LocalStorage-Persistenz und alle Aktionen (Generieren, Bearbeiten, Reset).
+// Zentrales State-Management (ohne externe Bibliothek) für EINEN Laden. Kapselt
+// Schedule, LocalStorage-Persistenz, Sync und alle Aktionen (Generieren,
+// Bearbeiten, Reset). Die App ruft den Hook je Laden einmal auf (App.tsx).
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -22,11 +23,9 @@ import {
 } from "../lib/workHours";
 import { datesOfMonth } from "../lib/demand";
 import { publicHolidays } from "../lib/holidays";
-import { COMPANY_ADDRESS, COMPANY_NAME } from "../lib/company";
-import { createInitialSchedule } from "../lib/sampleData";
+import { initialScheduleFor, profileById, withSharedPersonDefaults, type StoreProfile } from "../lib/stores";
 import { contractOpenDays } from "../lib/contract";
 import { weekStartOf } from "../lib/weeks";
-import { WORK_ROLES } from "../lib/employment";
 
 /**
  * Steht in diesem Stand überhaupt etwas? Maßstab sind Mitarbeiter und
@@ -36,11 +35,11 @@ function hatInhalt(state: PersistedState): boolean {
   return state.schedule.employees.length > 0 || state.schedule.shifts.length > 0;
 }
 
-function emptySchedule(): Schedule {
+function emptySchedule(profile: StoreProfile): Schedule {
   const now = new Date();
   return {
-    companyName: COMPANY_NAME,
-    address: COMPANY_ADDRESS,
+    companyName: profile.name,
+    address: profile.address,
     year: now.getFullYear(),
     month: now.getMonth() + 1,
     workHours: structuredClone(DEFAULT_WORK_HOURS),
@@ -57,25 +56,27 @@ function overridesToMap(list: DateOverride[]): OverrideMap {
   return map;
 }
 
-/** Unbekannte Bereiche aus alten Speicherständen werden zu „chưa gán". */
-function normalizeEmployee(employee: Employee): Employee {
-  const role: string | undefined = employee.workRole;
-  return role == null || (WORK_ROLES as readonly string[]).includes(role) ? employee : { ...employee, workRole: undefined };
+/** Bereiche, die es in diesem Laden nicht gibt (z. B. Lái xe bei Anji), werden zu „chưa gán". */
+function normalizeEmployee(employee: Employee, profile: StoreProfile): Employee {
+  // blockedDates gilt nur während der Planung und wird nie gespeichert.
+  const { blockedDates: _transient, ...rest } = employee;
+  const role: string | undefined = rest.workRole;
+  return role == null || (profile.workRoles as readonly string[]).includes(role) ? rest : { ...rest, workRole: undefined };
 }
 
 /** Migriert einen (evtl. alten) gespeicherten Stand auf das aktuelle Schema. */
-function normalizeSchedule(raw: Schedule | undefined): Schedule {
-  const base = emptySchedule();
+function normalizeSchedule(raw: Schedule | undefined, profile: StoreProfile): Schedule {
+  const base = emptySchedule(profile);
   if (!raw) return base;
   return {
     // Firmenname & Adresse sind fest (không cho sửa) – immer erzwingen.
-    companyName: COMPANY_NAME,
-    address: COMPANY_ADDRESS,
+    companyName: profile.name,
+    address: profile.address,
     year: raw.year ?? base.year,
     month: raw.month ?? base.month,
     workHours: normalizeWorkHours(raw.workHours),
     dateOverrides: Array.isArray(raw.dateOverrides) ? raw.dateOverrides : [],
-    employees: (raw.employees ?? []).map(normalizeEmployee),
+    employees: withSharedPersonDefaults((raw.employees ?? []).map((employee) => normalizeEmployee(employee, profile))),
     shifts: raw.shifts ?? [],
     lockedAt: raw.lockedAt,
     printedWeeks: Array.isArray(raw.printedWeeks) ? raw.printedWeeks : [],
@@ -86,18 +87,19 @@ function newEmployeeId(): string {
   return `emp-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 }
 
-export function useSchedule() {
+export function useSchedule(storeId: string) {
+  const profile = profileById(storeId);
   const [schedule, setSchedule] = useState<Schedule>(() => {
-    const persisted = loadState();
+    const persisted = loadState(storeId);
     // Beim allerersten Öffnen (kein gespeicherter Stand) zeigt die App die
     // Startbelegschaft aus der Angabe des Betriebs, damit sie nicht leer ist.
-    return normalizeSchedule(persisted?.schedule ?? createInitialSchedule());
+    return normalizeSchedule(persisted?.schedule ?? initialScheduleFor(profile), profile);
   });
   const [passwordHash, setPasswordHash] = useState<string | undefined>(
-    () => loadState()?.passwordHash,
+    () => loadState(storeId)?.passwordHash,
   );
   const [originalShifts, setOriginalShifts] = useState<Shift[]>(() => {
-    const persisted = loadState();
+    const persisted = loadState(storeId);
     return persisted?.originalShifts ?? [];
   });
   const [genError, setGenError] = useState<string | null>(null);
@@ -115,8 +117,8 @@ export function useSchedule() {
 
   // Immer sofort lokal sichern – das ist der Offline-Puffer.
   useEffect(() => {
-    saveState({ schedule, originalShifts, passwordHash });
-  }, [schedule, originalShifts, passwordHash]);
+    saveState(storeId, { schedule, originalShifts, passwordHash });
+  }, [storeId, schedule, originalShifts, passwordHash]);
 
   // Letzter Stand für Zugriffe außerhalb des Renders (siehe Erst-Upload).
   const latest = useRef<PersistedState>({ schedule, originalShifts, passwordHash });
@@ -133,10 +135,10 @@ export function useSchedule() {
     let cancelled = false;
     (async () => {
       try {
-        const remote = await loadRemote();
+        const remote = await loadRemote(storeId);
         if (cancelled) return;
         if (remote?.schedule) {
-          setSchedule(normalizeSchedule(remote.schedule));
+          setSchedule(normalizeSchedule(remote.schedule, profileById(storeId)));
           setOriginalShifts(remote.originalShifts ?? []);
           setPasswordHash(remote.passwordHash);
         } else if (hatInhalt(latest.current)) {
@@ -144,7 +146,7 @@ export function useSchedule() {
           // aber nur, wenn lokal überhaupt etwas drinsteht. Eine leere Zeile
           // anzulegen bringt nichts und macht aus "noch nichts eingetragen"
           // versehentlich einen gespeicherten Leerstand.
-          await saveRemote(latest.current);
+          await saveRemote(storeId, latest.current);
         }
         if (!cancelled) setRemoteStatus("idle");
         // NUR nach erfolgreichem Lesen darf hochgeladen werden.
@@ -160,19 +162,19 @@ export function useSchedule() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [storeId]);
 
   // Änderungen gebündelt hochladen (nicht bei jedem Tastendruck).
   useEffect(() => {
     if (!isRemoteConfigured || !hydrated.current) return;
     const timer = window.setTimeout(() => {
       setRemoteStatus("saving");
-      saveRemote({ schedule, originalShifts, passwordHash })
+      saveRemote(storeId, { schedule, originalShifts, passwordHash })
         .then(() => setRemoteStatus("idle"))
         .catch(() => setRemoteStatus("error"));
     }, 1000);
     return () => window.clearTimeout(timer);
-  }, [schedule, originalShifts, passwordHash]);
+  }, [storeId, schedule, originalShifts, passwordHash]);
 
   // Offene Tage des Monats – für die Umrechnung von Wochenverträgen (weeklyHours)
   // ins Monats-Soll (siehe contract.ts / validateSchedule).
@@ -193,8 +195,8 @@ export function useSchedule() {
   }, [openDates]);
 
   const validation: ValidationResult = useMemo(
-    () => validateSchedule(schedule.employees, schedule.shifts, schedule.year, openDates, schedule.workHours),
-    [schedule.employees, schedule.shifts, schedule.year, openDates, schedule.workHours],
+    () => validateSchedule(schedule.employees, schedule.shifts, schedule.year, openDates, schedule.workHours, profile.dayWeights),
+    [schedule.employees, schedule.shifts, schedule.year, openDates, schedule.workHours, profile],
   );
 
   /**
@@ -212,8 +214,10 @@ export function useSchedule() {
       overrides: overridesToMap(schedule.dateOverrides),
       employees: schedule.employees,
       shifts: schedule.shifts,
+      profile,
     });
   }, [
+    profile,
     schedule.year,
     schedule.month,
     schedule.workHours,
@@ -256,16 +260,16 @@ export function useSchedule() {
    * dann scheinbar von selbst zurückgekommen.
    */
   const pushNow = useCallback(async (state: PersistedState) => {
-    saveState(state);
+    saveState(storeId, state);
     if (!isRemoteConfigured || !hydrated.current) return;
     setRemoteStatus("saving");
     try {
-      await saveRemote(state);
+      await saveRemote(storeId, state);
       setRemoteStatus("idle");
     } catch {
       setRemoteStatus("error");
     }
-  }, []);
+  }, [storeId]);
 
   /**
    * Passwort der Filiale ändern. Gibt eine Meldung zurück oder null bei Erfolg.
@@ -359,7 +363,13 @@ export function useSchedule() {
    * die Schichten; getrennt (erst updateMeta, dann generate) plante der
    * Callback noch mit dem alten Monat.
    */
-  const generate = useCallback((target?: { year: number; month: number }) => {
+  const generate = useCallback((
+    target?: { year: number; month: number },
+    /** Tage je Mitarbeiter-id, an denen die Person schon im anderen Laden arbeitet. */
+    blockedDays?: Record<string, readonly string[]>,
+    /** Höchstens so viele Tage je Woche in diesem Laden (gemeinsame Leute). */
+    daysPerWeekCap?: Record<string, number>,
+  ): Shift[] => {
     // Ein neuer Plan hebt die Sperre des Monats auf: das alte gedruckte Blatt
     // ist damit überholt, also verschwinden auch die „gedruckt"-Häkchen der
     // Wochen. Die Oberfläche fragt bei einem gesperrten Monat vorher nach.
@@ -368,7 +378,7 @@ export function useSchedule() {
     const month = target?.month ?? schedule.month;
     if (!isScheduleYearAllowed(year)) {
       setGenError(`Chỉ tạo lịch cho các năm ${SCHEDULE_YEAR_RANGE_LABEL}.`);
-      return;
+      return [];
     }
     try {
       const shifts = generateSchedule({
@@ -377,16 +387,22 @@ export function useSchedule() {
         workHours: schedule.workHours,
         overrides: overridesToMap(schedule.dateOverrides),
         employees: schedule.employees,
+        profile,
+        blockedDays,
+        daysPerWeekCap,
         // Frischer Seed pro Klick => jedes Mal ein anderer gültiger Plan.
         seed: `${year}-${month}-${Date.now()}-${genNonce.current++}`,
       });
       setSchedule((s) => ({ ...s, year, month, shifts, lockedAt: undefined, printedWeeks: [] }));
       setOriginalShifts(shifts.map((sh) => ({ ...sh })));
       setGenStamp((n) => n + 1);
+      return shifts;
     } catch (err) {
       setGenError(err instanceof Error ? err.message : String(err));
+      return [];
     }
   }, [
+    profile,
     schedule.year,
     schedule.month,
     schedule.workHours,
@@ -402,15 +418,15 @@ export function useSchedule() {
   }, [originalShifts]);
 
   const resetAll = useCallback(() => {
-    clearState();
-    setSchedule(emptySchedule());
+    clearState(storeId);
+    setSchedule(emptySchedule(profileById(storeId)));
     setOriginalShifts([]);
     setGenError(null);
-  }, []);
+  }, [storeId]);
 
   const saveNow = useCallback(() => {
-    saveState({ schedule, originalShifts, passwordHash });
-  }, [schedule, originalShifts, passwordHash]);
+    saveState(storeId, { schedule, originalShifts, passwordHash });
+  }, [storeId, schedule, originalShifts, passwordHash]);
 
   // ----- Ausnahmen je Datum -----
   const upsertOverride = useCallback((override: DateOverride) => {
@@ -501,6 +517,8 @@ export function useSchedule() {
   }, []);
 
   return {
+    storeId,
+    profile,
     schedule,
     originalShifts,
     validation,

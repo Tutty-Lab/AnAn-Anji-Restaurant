@@ -20,11 +20,14 @@
 // ============================================================================
 
 import type { Employee } from "../types";
-import { DAY_WEIGHTS, parseIsoDate, weekdayKeyOf, type WeekdayKey } from "./demand";
+import { parseIsoDate, weekdayKeyOf, type WeekdayKey } from "./demand";
 import { weekStartOf } from "./weeks";
 import { DEFAULT_WORK_HOURS, type WorkHoursConfig } from "./workHours";
 import { countsForContract } from "./availability";
-import { driverWindowOf } from "./staffing";
+import { ANAN_PROFILE, driverWindowOf } from "./staffing";
+
+type Weights = Record<WeekdayKey, number>;
+const DEFAULT_WEIGHTS: Weights = ANAN_PROFILE.dayWeights;
 
 /** ISO "yyyy-MM-dd" + n Tage (UTC, ohne Zeitzonen-Verschiebung). */
 function addDaysIso(isoDate: string, days: number): string {
@@ -69,9 +72,9 @@ export type WeekShare = {
  * konkreten Datums – sonst ergäben die beiden Monatsteile einer Woche zusammen
  * mehr oder weniger als eine Woche.
  */
-function weekdayFactor(weekday: WeekdayKey, workHours: WorkHoursConfig): number {
+function weekdayFactor(weekday: WeekdayKey, workHours: WorkHoursConfig, weights: Weights): number {
   const minutes = workHours.perWeekday[weekday].reduce((sum, block) => sum + (block.endMinutes - block.startMinutes), 0);
-  return DAY_WEIGHTS[weekday] * minutes;
+  return weights[weekday] * minutes;
 }
 
 /**
@@ -80,12 +83,12 @@ function weekdayFactor(weekday: WeekdayKey, workHours: WorkHoursConfig): number 
  * folgt dieser Kernzeit, nicht Tagesgewicht × Öffnungsdauer. Sonst bekäme eine Randwoche
  * mit ruhigen Tagen zu wenig Fahrerstunden und ein Abend bliebe ohne Fahrer.
  */
-function contractFactor(emp: Employee, weekday: WeekdayKey, workHours: WorkHoursConfig): number {
+function contractFactor(emp: Employee, weekday: WeekdayKey, workHours: WorkHoursConfig, weights: Weights): number {
   if (emp.workRole === "DRIVER") {
     const window = driverWindowOf(weekday);
     return window.endMinutes - window.startMinutes;
   }
-  return weekdayFactor(weekday, workHours);
+  return weekdayFactor(weekday, workHours, weights);
 }
 
 /**
@@ -99,6 +102,7 @@ export function weekSharesFor(
   emp: Employee,
   openDates: readonly string[],
   workHours: WorkHoursConfig = DEFAULT_WORK_HOURS,
+  weights: Weights = DEFAULT_WEIGHTS,
 ): WeekShare[] {
   const weeksByWeekday = new Map<WeekdayKey, Set<string>>();
   for (const date of openDates) {
@@ -106,7 +110,7 @@ export function weekSharesFor(
     weeksByWeekday.set(weekday, (weeksByWeekday.get(weekday) ?? new Set()).add(weekStartOf(date)));
   }
   const fullWeek = [...weeksByWeekday].reduce(
-    (sum, [weekday, weeks]) => sum + (weeks.size >= 2 ? contractFactor(emp, weekday, workHours) : 0),
+    (sum, [weekday, weeks]) => sum + (weeks.size >= 2 ? contractFactor(emp, weekday, workHours, weights) : 0),
     0,
   );
   if (fullWeek <= 0) return [];
@@ -116,7 +120,7 @@ export function weekSharesFor(
     if (!countsForContract(emp, date)) continue;
     const week = weekStartOf(date);
     const entry = byWeek.get(week) ?? { factor: 0, days: 0 };
-    entry.factor += contractFactor(emp, weekdayKeyOf(parseIsoDate(date)), workHours);
+    entry.factor += contractFactor(emp, weekdayKeyOf(parseIsoDate(date)), workHours, weights);
     entry.days += 1;
     byWeek.set(week, entry);
   }
@@ -146,10 +150,11 @@ export function monthlyTargetMinutesFor(
   emp: Employee,
   openDates: readonly string[],
   workHours: WorkHoursConfig = DEFAULT_WORK_HOURS,
+  weights: Weights = DEFAULT_WEIGHTS,
 ): number {
   if (emp.weeklyHours == null) return emp.targetMinutes;
   const weekly = emp.weeklyHours * 60;
-  return Math.max(0, Math.round(weekSharesFor(emp, openDates, workHours).reduce((sum, week) => sum + weekPartMinutes(weekly, week), 0)));
+  return Math.max(0, Math.round(weekSharesFor(emp, openDates, workHours, weights).reduce((sum, week) => sum + weekPartMinutes(weekly, week), 0)));
 }
 
 /**
@@ -167,12 +172,13 @@ export function weeklyBudgetMinutes(
   openDates: readonly string[],
   monthBounds: { first: string; last: string },
   workHours: WorkHoursConfig = DEFAULT_WORK_HOURS,
+  weights: Weights = DEFAULT_WEIGHTS,
 ): Map<string, number> {
   const result = new Map<string, number>();
   if (emp.weeklyHours == null || emp.weeklyHours <= 0) return result;
   const weeklyMinutes = emp.weeklyHours * 60;
   const contractSlots = Math.floor(weeklyMinutes / SCHEDULE_SLOT_MINUTES + 1e-9);
-  const weeks = weekSharesFor(emp, openDates, workHours).map((week) => ({
+  const weeks = weekSharesFor(emp, openDates, workHours, weights).map((week) => ({
     weekStart: week.weekStart,
     slots: weekPartMinutes(weeklyMinutes, week) / SCHEDULE_SLOT_MINUTES,
     capSlots: Math.min(contractSlots, Math.floor((week.days * MAX_PAID_MINUTES_PER_DAY) / SCHEDULE_SLOT_MINUTES)),
@@ -222,6 +228,7 @@ export function monthlyBudgetMinutes(
   emp: Employee,
   openDates: readonly string[],
   workHours: WorkHoursConfig = DEFAULT_WORK_HOURS,
+  weights: Weights = DEFAULT_WEIGHTS,
 ): Map<string, number> {
   const result = new Map<string, number>();
   const byWeek = new Map<string, { factor: number; days: number }>();
@@ -230,7 +237,7 @@ export function monthlyBudgetMinutes(
     if (!result.has(week)) result.set(week, 0);
     if (!countsForContract(emp, date)) continue;
     const entry = byWeek.get(week) ?? { factor: 0, days: 0 };
-    entry.factor += contractFactor(emp, weekdayKeyOf(parseIsoDate(date)), workHours);
+    entry.factor += contractFactor(emp, weekdayKeyOf(parseIsoDate(date)), workHours, weights);
     entry.days += 1;
     byWeek.set(week, entry);
   }

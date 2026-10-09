@@ -6,6 +6,7 @@
 
 import type { Employee, Shift } from "../types";
 import type { OverrideMap, WorkHoursConfig } from "./workHours";
+import type { StoreProfile } from "./staffing";
 import { generateWeeklySchedule } from "./weeklyScheduler";
 
 export type GenerateInput = {
@@ -18,6 +19,12 @@ export type GenerateInput = {
   employees: Employee[];
   /** Feiertage als ISO-Set; Standard: Feiertage in Bayern des Jahres. */
   holidays?: Set<string>;
+  /** Laden (Regeln, Gewichte, Nachfrage); Standard: AnAn. */
+  profile?: StoreProfile;
+  /** Tage je Mitarbeiter-id, an denen die Person schon im anderen Laden arbeitet. */
+  blockedDays?: Record<string, readonly string[]>;
+  /** Höchstens so viele Tage je Woche in diesem Laden (gemeinsame Leute). */
+  daysPerWeekCap?: Record<string, number>;
   /** Nicht verwendet (der Wochenplaner ist deterministisch); bleibt für die Signatur. */
   seed?: string;
 };
