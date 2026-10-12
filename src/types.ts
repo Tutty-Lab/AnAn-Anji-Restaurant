@@ -98,7 +98,25 @@ export type Employee = {
   canSwitchRole?: boolean;
   /** Rolle für einzelne Monate (Schlüssel yyyy-MM), sonst workRole. */
   roleByMonth?: Record<string, WorkRole>;
+  /**
+   * „Độ dài ca" (weich): eigene Dienstlänge in Stunden je Dienst. Der Planer
+   * bevorzugt Dienste in dieser Spanne. Fehlt = Standard (3–9 h).
+   */
+  shiftHours?: { min: number; max: number };
+  /**
+   * „Rải đều trong tháng" (weich): lieber mehr, dafür kürzere Einsätze – mit
+   * „Độ dài ca" Richtung Untergrenze. Die Wochenbudgets sind ohnehin über den
+   * Monat verteilt (contract.ts).
+   */
+  spreadEvenly?: boolean;
+  /** „Khung giờ ưu tiên" (weich): Wunschzeiten je Wochentag. */
+  preferredWindows?: PreferredWindow[];
+  /** Häkchen „Đã kiểm tra thông tin (Lưu)" – nur ein Merker, ohne Einfluss auf die Planung. */
+  saved?: boolean;
 };
+
+/** Ein Wunsch-Zeitfenster: an diesen Wochentagen von–bis (Minuten ab 0:00). */
+export type PreferredWindow = { days: WeekdayKey[]; startMinutes: number; endMinutes: number };
 
 export type Shift = {
   /** Explicit unpaid break, excluded from staffing coverage. */

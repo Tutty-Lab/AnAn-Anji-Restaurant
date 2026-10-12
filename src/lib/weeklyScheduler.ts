@@ -1,4 +1,5 @@
 import type { Employee, Shift } from "../types";
+import { minutesOutsidePreferred, ownShiftRangeMinutes, preferredWindowsOf, preferredWindowsOn } from "./preferredWindows";
 import { datesOfMonth, parseIsoDate, weekdayKeyOf, type WeekdayKey } from "./demand";
 import { monthlyBudgetMinutes, weeklyBudgetMinutes } from "./contract";
 import { calculatePause } from "./time";
@@ -149,6 +150,19 @@ export const SCHEDULER_TUNING = {
    * (90.000) und einer harten Lücke (900.000) je halbe Stunde.
    */
   weekShortCost: 300000,
+  /**
+   * Luật riêng (mềm) aus dem Tab Nhân viên – je halbe Stunde bzw. je Tag. Unter
+   * einer weichen Besetzungslücke (90.000 je halbe Stunde), damit ein Wunsch nie
+   * eine Lücke im Laden erzeugt, aber über dem Feinschliff der Tageskurve.
+   *  - ownShiftSlotCost: Dienstlänge außerhalb „Độ dài ca",
+   *  - preferredSlotCost: Arbeit außerhalb „Khung giờ ưu tiên",
+   *  - unpreferredDayCost: ein Tag ganz ohne Wunschfenster,
+   *  - spreadSlotCost: „Rải đều" + „Độ dài ca": jede halbe Stunde über der Untergrenze.
+   */
+  ownShiftSlotCost: 20000,
+  preferredSlotCost: 10000,
+  unpreferredDayCost: 40000,
+  spreadSlotCost: 2000,
 };
 
 const GROUP_INDEX: Record<StaffGroup, number> = { KITCHEN: 0, SERVICE: 1, DRIVER: 2 };
@@ -263,6 +277,20 @@ function styleCostOf(employee: Employee, date: string, weekday: WeekdayKey, shif
     const covered = shifts.reduce((sum, shift) =>
       sum + Math.max(0, Math.min(shift.endMinutes, window.endMinutes) - Math.max(shift.startMinutes, window.startMinutes)), 0);
     cost += Math.max(0, window.endMinutes - window.startMinutes - covered) / SLOT * SCHEDULER_TUNING.driverShortCost;
+  }
+  const own = ownShiftRangeMinutes(employee);
+  if (own) {
+    // Wie in Thiên Long: ein Arbeitstag = ein Einsatz (geteilter Dienst zählt zusammen).
+    const paid = shifts.reduce((sum, shift) => sum + shift.paidMinutes, 0);
+    const outside = Math.max(0, own.min - paid) + Math.max(0, paid - own.max);
+    cost += outside / SLOT * SCHEDULER_TUNING.ownShiftSlotCost;
+    if (employee.spreadEvenly) cost += Math.max(0, paid - own.min) / SLOT * SCHEDULER_TUNING.spreadSlotCost;
+  }
+  if (preferredWindowsOf(employee).length > 0) {
+    // Wunschfenster gelten für den echten Wochentag (Feiertag bleibt z. B. Montag).
+    const realWeekday = dayOf(date);
+    if (preferredWindowsOn(employee, realWeekday).length === 0) cost += SCHEDULER_TUNING.unpreferredDayCost;
+    cost += minutesOutsidePreferred(employee, realWeekday, shifts) / SLOT * SCHEDULER_TUNING.preferredSlotCost;
   }
   if (employee.employmentType === "VOLLZEIT") {
     const pattern = ctx.patterns.get(employee.id);
