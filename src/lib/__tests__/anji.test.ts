@@ -45,9 +45,9 @@ describe("Arbeitszeit", () => {
 });
 
 describe("Lohnabrechnung", () => {
-  it("19 Personen, 07/2024 ohne Daten, Bếp/Bồi in jedem vollen Monat vorhanden", () => {
+  it("20 Personen, 07/2024 ohne Daten, Bếp/Bồi in jedem vollen Monat vorhanden", () => {
     const names = new Set(Object.values(ANJI_PAYROLL).flat().map((entry) => entry.name));
-    expect(names.size).toBe(19);
+    expect(names.size).toBe(20);
     expect(ANJI_PAYROLL["2024-07"]).toBeUndefined();
     for (const [monthKey, entries] of Object.entries(ANJI_PAYROLL)) {
       if (entries.length < 9) continue;
@@ -60,7 +60,8 @@ describe("Lohnabrechnung", () => {
   it("Vollzeit ab 150 h; Ein-/Austritt mitten im Monat behält die Art", () => {
     const april = new Map(anjiRoster("2024-04").map((employee) => [employee.name, employee]));
     expect(april.get("Truong Thai Nguyen")).toMatchObject({ employmentType: "VOLLZEIT", endDate: "2024-04-17" });
-    expect(april.get("Duc Thinh Nguyen")).toMatchObject({ employmentType: "VOLLZEIT", startDate: "2024-04-17" });
+    // Duc Thinh: 81,11 h im Eintrittsmonat, danach 44,31 h – Teilzeit.
+    expect(april.get("Duc Thinh Nguyen")).toMatchObject({ employmentType: "TEILZEIT", startDate: "2024-04-17" });
     expect(april.get("Thi Mo Nguyen")!.employmentType).toBe("TEILZEIT");
     expect(april.get("Ha Phuong Nguyen")).toMatchObject({ employmentType: "AZUBI", workRole: "SERVICE" });
     expect(april.get("Hong Son Le")!.workRole).toBe("KITCHEN");

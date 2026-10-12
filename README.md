@@ -10,7 +10,7 @@ Oberfläche ist auf Vietnamesisch. Erstellt aus
 | Laden | `store_id` | Anschrift | Bereiche |
 |---|---|---|---|
 | Restaurant AnAn | `anan` | Elvirastr. 12, 80636 München | Bếp, Phục vụ, Lái xe |
-| Restaurant Anji | `anji` | (noch nicht angegeben) | Bếp, Bồi |
+| Restaurant Anji | `anji` | Donnersbergerstr. 30, 80634 München | Bếp, Bồi |
 
 ## Ein Betrieb, zwei Läden
 
@@ -43,8 +43,9 @@ Verbindungen setzt der Tab „Nhân viên" im Feld „Cũng làm ở quán khác
 - Eine Hand-Änderung, die jemanden doppelt einplant oder über 6 Tage bringt,
   meldet die App rot oben auf der Seite (`crossStoreConflicts`,
   `crossStoreRunIssues`).
-- 10/2024: Hong Son Le steht mit je 173,81 h in beiden Abrechnungen (347,6 h) –
-  das geht nicht; beide Läden melden fehlende Stunden.
+- Hong Son Le: Anji 03–06/2024, AnAn 10/2024 – nie im selben Monat.
+- Lohndaten Anji: „AnAn_Anji_BangLuong_ChamCong_2023_2024.pdf", gegen die
+  einzelnen Lohnabrechnungen geprüft (dazu 12/2023 Ha Phuong Nguyen 32,45 h).
 
 ## Arbeitszeit (beide Läden)
 

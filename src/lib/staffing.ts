@@ -305,8 +305,8 @@ export const ANJI_PROFILE: StoreProfile = {
   id: "anji",
   name: "Restaurant Anji",
   shortName: "Anji",
-  // Anschrift vom Betrieb noch nicht angegeben.
-  address: "",
+  // Anschrift laut Lohnabrechnung (Anji GmbH).
+  address: "Donnersbergerstr. 30, 80634 München",
   // Personenstunden je Öffnungsstunde laut Besetzungsvorgabe: Mo–Mi ≈ 4,8,
   // Do–Fr ≈ 7,3, Sa ≈ 6,1, So ≈ 4,6 – auf Mo = 1,0 normiert.
   dayWeights: { monday: 1.0, tuesday: 1.0, wednesday: 1.0, thursday: 1.5, friday: 1.5, saturday: 1.3, sunday: 1.0 },

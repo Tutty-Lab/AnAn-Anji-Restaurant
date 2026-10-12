@@ -504,15 +504,16 @@ function drawStundenzettel(
 export async function buildStundenzettelPdf(
   schedule: Schedule,
   employees: Employee[],
-  opts: { dates?: string[]; periodLabel?: string } = {},
+  opts: { dates?: string[]; periodLabel?: string; /** An dieses Dokument anhängen (mehrere Monate in einer Datei). */ doc?: jsPDF } = {},
   onProgress?: (current: number, total: number) => void,
 ): Promise<jsPDF> {
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+  const append = opts.doc != null;
+  const doc = opts.doc ?? new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
   const dates = opts.dates ?? datesOfMonth(schedule.year, schedule.month);
   const periodLabel = opts.periodLabel ?? monthLabelDe(schedule.year, schedule.month);
 
   for (let i = 0; i < employees.length; i++) {
-    if (i > 0) doc.addPage();
+    if (i > 0 || append) doc.addPage();
     drawStundenzettel(doc, schedule, employees[i], dates, periodLabel);
     onProgress?.(i + 1, employees.length);
     if (employees.length > 1) await new Promise((r) => setTimeout(r, 0));

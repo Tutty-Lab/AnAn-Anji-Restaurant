@@ -70,7 +70,7 @@ describe("Mitarbeiter in beiden Läden", () => {
   });
 });
 
-describe("Tạo lịch: nie am selben Tag in zwei Läden (10/2024: Hong Son Le und Huy Nam Nguyen)", () => {
+describe("Tạo lịch: nie am selben Tag in zwei Läden (10/2024: Huy Nam Nguyen)", () => {
   const year = 2024;
   const month = 10;
   const rosters = { anan: storeRoster("anan", "2024-10"), anji: storeRoster("anji", "2024-10") };
@@ -94,8 +94,8 @@ describe("Tạo lịch: nie am selben Tag in zwei Läden (10/2024: Hong Son Le u
     expect(crossStoreConflicts(schedules)).toEqual([]);
   });
 
-  it("beide Personen arbeiten in beiden Läden (nur an verschiedenen Tagen)", () => {
-    for (const name of ["Hong Son Le", "Huy Nam Nguyen"]) {
+  it("Huy Nam arbeitet in beiden Läden (nur an verschiedenen Tagen)", () => {
+    for (const name of ["Huy Nam Nguyen"]) {
       for (const store of schedules) {
         const id = store.schedule.employees.find((e) => e.name === name)!.id;
         expect(store.schedule.shifts.some((s) => s.employeeId === id), `${name} ${store.shortName}`).toBe(true);
@@ -113,7 +113,7 @@ describe("Tạo lịch: nie am selben Tag in zwei Läden (10/2024: Hong Son Le u
     expect(huyNam.size).toBeLessThanOrEqual(27);
   });
 
-  it("Huy Nam (AnAn 28,2 h, Anji 173,81 h): AnAn nimmt höchstens 1 Tag je Woche, Anji bekommt sein Soll", () => {
+  it("Huy Nam (AnAn 28,2 h, Anji 127 h): AnAn nimmt höchstens 1 Tag je Woche, Anji bekommt sein Soll", () => {
     const anan = schedules[0].schedule;
     const id = anan.employees.find((e) => e.name === "Huy Nam Nguyen")!.id;
     const byWeek = new Map<string, number>();
@@ -156,11 +156,12 @@ describe("Tạo lịch: nie am selben Tag in zwei Läden (10/2024: Hong Son Le u
   it("eine Hand-Änderung, die jemanden doppelt einplant, wird gemeldet", () => {
     const anan = schedules[0];
     const anji = schedules[1];
-    const hongAnan = anan.schedule.employees.find((e) => e.name === "Hong Son Le")!;
-    const anjiShift = anji.schedule.shifts.find((s) => anji.schedule.employees.find((e) => e.id === s.employeeId)?.name === "Hong Son Le")!;
-    const doubled = { ...anan, schedule: { ...anan.schedule, shifts: [...anan.schedule.shifts, { ...anjiShift, id: "x", employeeId: hongAnan.id }] } };
+    const huyAnan = anan.schedule.employees.find((e) => e.name === "Huy Nam Nguyen")!;
+    const ananDates = new Set(anan.schedule.shifts.filter((s) => s.employeeId === huyAnan.id).map((s) => s.date));
+    const anjiShift = anji.schedule.shifts.find((s) => anji.schedule.employees.find((e) => e.id === s.employeeId)?.name === "Huy Nam Nguyen" && !ananDates.has(s.date))!;
+    const doubled = { ...anan, schedule: { ...anan.schedule, shifts: [...anan.schedule.shifts, { ...anjiShift, id: "x", employeeId: huyAnan.id }] } };
     const conflicts = crossStoreConflicts([doubled, anji]);
-    expect(conflicts).toEqual([{ personKey: "hong-son-le", name: "Hong Son Le", date: anjiShift.date, stores: ["AnAn", "Anji"] }]);
+    expect(conflicts).toEqual([{ personKey: "huy-nam-nguyen", name: "Huy Nam Nguyen", date: anjiShift.date, stores: ["AnAn", "Anji"] }]);
   });
 });
 

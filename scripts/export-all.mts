@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { generateSchedule } from "../src/lib/scheduler";
 import { ANAN_MISSING_MONTHS } from "../src/lib/ananPayroll";
+import { ANJI_MISSING_MONTHS } from "../src/lib/anjiPayroll";
 import { payrollMonths, storeRoster } from "../src/lib/stores";
 import { DEFAULT_WORK_HOURS, resolveDay, effectiveWeekdayKey } from "../src/lib/workHours";
 import { publicHolidays } from "../src/lib/holidays";
@@ -24,7 +25,7 @@ import type { Employee, Schedule, Shift } from "../src/types";
 const baseDir = process.argv[2] ?? "output";
 const hm = (minutes: number) => `${(minutes / 60).toFixed(2).replace(".", ",")}`;
 const WD_VI = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
-const MISSING: Record<string, Record<string, string>> = { anan: ANAN_MISSING_MONTHS, anji: {} };
+const MISSING: Record<string, Record<string, string>> = { anan: ANAN_MISSING_MONTHS, anji: ANJI_MISSING_MONTHS };
 
 type Acc = { csv: string[]; report: string[]; summary: string[]; months: string[] };
 const acc: Record<string, Acc> = Object.fromEntries(STORE_PROFILES.map((profile) => {
