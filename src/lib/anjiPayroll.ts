@@ -58,10 +58,6 @@ export const ANJI_PAYROLL: Record<string, PayrollEntry[]> = {
     e("Thi Thuy Linh Nguyen", 173.81), e("Thi Thuy Nhu", 169.72), e("Truong Thai Nguyen", 173.81),
     e("Van Quyet Hoang", 173.81), e("Xuan Chi Dong", 173.81),
   ],
-  "2024-01": [
-    e("Ha Phuong Nguyen", 88.5), e("Quang Tien La", 47.2, { startDate: "2024-01-16" }),
-    e("Tien Viet Pham", 44.25, { startDate: "2024-01-17" }),
-  ],
   "2024-02": [
     e("Duc Tuan Nguyen", 91), e("Ha Phuong Nguyen", 88.5), e("Quang Tien La", 88.5),
     e("The Buong Nguyen", 169.72), e("Thi Mo Nguyen", 83.33), e("Thi Thuy Linh Nguyen", 173.81),
@@ -122,6 +118,7 @@ export const ANJI_PAYROLL: Record<string, PayrollEntry[]> = {
 /** Tháng thiếu bảng lương – không xếp lịch, không xuất (như ANAN_MISSING_MONTHS). */
 export const ANJI_MISSING_MONTHS: Record<string, string> = {
   "2023-11": "Không có bảng lương tháng 11; chỉ có điều chỉnh in kèm 12/2023 (Quoc Dat Nguyen 173,81 h, nghỉ 30.11.; Thi Thuy Nhu 169,72 h).",
+  "2024-01": "Không có bảng lương tháng 1; chỉ có điều chỉnh in kèm 02/2024 (3 Azubi Bồi: Ha Phuong Nguyen 88,5 h, Quang Tien La 47,2 h, Tien Viet Pham 44,25 h) – không có Bếp.",
   "2024-05": "Không có bảng lương tháng 5; chỉ có điều chỉnh in kèm 06/2024 (Thi Thuy Linh Nguyen 31,18 h, nghỉ 15.05.).",
   "2024-07": "Không có bảng lương tháng 7 trong bộ file.",
 };

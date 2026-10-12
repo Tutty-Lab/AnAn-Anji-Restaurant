@@ -4,7 +4,7 @@
 // Thứ tự: AnAn (các tháng) rồi Anji; trong mỗi tháng mỗi người một trang.
 // Mục lục (bookmark) theo quán → tháng → người. Tháng thiếu bảng lương
 // (ANAN_/ANJI_MISSING_MONTHS) không có trong payrollMonths nên không xuất.
-// Ra thêm: mỗi quán, mỗi tháng một file <Quán>_<MM>_<YYYY>.pdf.
+// Ra thêm: mỗi quán, mỗi tháng một file <Quán>/<Quán>_<MM>_<YYYY>.pdf.
 // Chạy: npx vite-node scripts/export-stundenzettel-all.mts [thư mục ra]   (mặc định output)
 import fs from "node:fs";
 import path from "node:path";
@@ -56,7 +56,9 @@ for (const profile of STORE_PROFILES) {
     };
     const first = pages + 1;
     doc = await buildStundenzettelPdf(schedule, employees, { doc });
-    save(path.join(outDir, `${profile.shortName}_${monthTag(monthKey)}.pdf`), await buildStundenzettelPdf(schedule, employees));
+    const storeDir = path.join(outDir, profile.shortName);
+    fs.mkdirSync(storeDir, { recursive: true });
+    save(path.join(storeDir, `${profile.shortName}_${monthTag(monthKey)}.pdf`), await buildStundenzettelPdf(schedule, employees));
     storeMark.months.push({
       title: `${String(month).padStart(2, "0")}/${year}`,
       page: first,
