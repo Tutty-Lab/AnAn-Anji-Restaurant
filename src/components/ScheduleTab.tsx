@@ -9,13 +9,13 @@ import {
 } from "../lib/demand";
 import { minutesToShortHours, minutesToTime } from "../lib/time";
 import { signedHours } from "../lib/dateFormat";
-import { isDayClosed } from "../lib/workHours";
+import { effectiveWeekdayKey, isDayClosed, resolveDay } from "../lib/workHours";
 import { publicHolidays } from "../lib/holidays";
 import { ShiftCellEditor } from "./ShiftCellEditor";
 import { ScheduleDayView } from "./ScheduleDayView";
 import { weeksOfMonth } from "../lib/weeks";
 import { employmentShortVi, roleLabelVi } from "../lib/employment";
-import { staffGroupOf } from "../lib/staffing";
+import { presentGroups, staffGroupOf, staffingWindows, workingAt, type StaffGroup } from "../lib/staffing";
 import { monthlyTargetMinutesFor, SCHEDULE_SLOT_MINUTES } from "../lib/contract";
 import { StaffingReport } from "./StaffingReport";
 import { PauseLabel } from "./PauseLabel";
@@ -126,6 +126,45 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
     return stats;
   }, [dates, schedule.shifts, schedule.employees]);
   const hasDrivers = schedule.employees.some((e) => e.workRole === "DRIVER");
+
+  // Bếp/Phục vụ ít nhất có mặt trong từng khung giờ (lúc vắng nhất của khung),
+  // để thấy ngay chỗ chỉ còn 0–1 người. `need` = mức tối thiểu theo quy tắc của
+  // quán (cứng + mềm, staffing.ts) – thiếu so với mức đó thì viền đỏ.
+  const coverage = useMemo(() => {
+    const result = new Map<string, Map<string, Coverage | null>>();
+    const holidays = publicHolidays(schedule.year);
+    const overrideMap = Object.fromEntries(schedule.dateOverrides.map((o) => [o.date, o]));
+    const groupById = new Map(schedule.employees.map((e) => [e.id, staffGroupOf(e)] as const));
+    const present = presentGroups(schedule.employees);
+    for (const d of dates) {
+      const perWindow = new Map<string, Coverage | null>();
+      result.set(d, perWindow);
+      const day = resolveDay(schedule.workHours, d, holidays, overrideMap);
+      if (day.closed) continue;
+      const dayShifts = schedule.shifts.filter((s) => s.date === d);
+      const rules = staffingWindows(day.blocks, effectiveWeekdayKey(d, holidays), present, store.profile);
+      for (const w of COVERAGE_WINDOWS) {
+        const from = w.from ?? day.blocks[0]?.startMinutes ?? 0;
+        let cell: Coverage | null = null;
+        for (const block of day.blocks) {
+          for (let t = Math.max(from, block.startMinutes); t + 30 <= Math.min(w.to, block.endMinutes); t += 30) {
+            const need = rules
+              .filter((r) => r.groups.length === 1 && r.groups[0] === w.group && t >= r.startMinutes && t + 30 <= r.endMinutes)
+              .reduce((max, r) => Math.max(max, r.minStaff), 0);
+            // Phục vụ bắt đầu từ giờ mở cửa: 30′ bếp chuẩn bị không tính cho Phục vụ.
+            if (w.group === "SERVICE" && need === 0 && t < block.startMinutes + 30 && block === day.blocks[0]) continue;
+            const count = dayShifts.filter((s) => groupById.get(s.employeeId) === w.group && workingAt(s, t)).length;
+            if (!cell) cell = { min: count, short: false, need: 0 };
+            cell.min = Math.min(cell.min, count);
+            if (count < need) cell.short = true;
+            cell.need = Math.max(cell.need, need);
+          }
+        }
+        perWindow.set(w.key, cell);
+      }
+    }
+    return result;
+  }, [dates, schedule, store.profile]);
 
   const hasSplitSunday = useMemo(() => {
     const holidays = publicHolidays(schedule.year);
@@ -436,6 +475,15 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
               />
               <SummaryRow label="Ca sáng" dates={gridDates} value={(d) => String(dayStats.get(d)!.early)} />
               <SummaryRow label="Ca tối" dates={gridDates} value={(d) => String(dayStats.get(d)!.late)} />
+              {COVERAGE_WINDOWS.map((w) => (
+                <CoverageRow
+                  key={w.key}
+                  label={`${store.profile.groupLabels[w.group]} ${w.range}`}
+                  labelClass={w.group === "KITCHEN" ? "text-orange-700" : "text-sky-700"}
+                  dates={gridDates}
+                  cell={(d) => coverage.get(d)?.get(w.key) ?? null}
+                />
+              ))}
             </tfoot>
           </table>
         </div>
@@ -479,6 +527,70 @@ function SummaryRow({
           {value(d)}
         </td>
       ))}
+      <td className="border-t border-l border-slate-200" />
+      <td className="border-t border-l border-slate-200" />
+    </tr>
+  );
+}
+
+type Coverage = { min: number; short: boolean; need: number };
+
+// Khung giờ cho các dòng „ít nhất" ở chân bảng (from undefined = đầu giờ làm).
+// Theo quy tắc AnAn/Anji: giờ đông 12–14h và 18–22h, đóng cửa 22–22:30.
+const COVERAGE_WINDOWS: { key: string; range: string; group: Exclude<StaffGroup, "DRIVER">; from?: number; to: number }[] = (
+  [
+    ["open", "mở cửa–12h", undefined, 12 * 60],
+    ["noon", "12–14h", 12 * 60, 14 * 60],
+    ["afternoon", "14–17h", 14 * 60, 17 * 60],
+    ["evening-open", "17–18h", 17 * 60, 18 * 60],
+    ["evening", "18–22h", 18 * 60, 22 * 60],
+    ["closing", "đóng cửa 22–22:30", 22 * 60, 22 * 60 + 30],
+  ] as const
+).flatMap(([key, range, from, to]) =>
+  (["KITCHEN", "SERVICE"] as const).map((group) => ({ key: `${group}-${key}`, range, group, from, to })),
+);
+
+/** Dòng „ít nhất x người" trong khung giờ: 0 = đỏ, 1 = vàng, thiếu so với quy tắc = viền đỏ. */
+function CoverageRow({
+  label,
+  labelClass = "",
+  dates,
+  cell,
+}: {
+  label: string;
+  labelClass?: string;
+  dates: string[];
+  cell: (d: string) => Coverage | null;
+}) {
+  return (
+    <tr className="bg-slate-50 text-slate-600">
+      <td className={`sticky left-0 z-10 bg-slate-50 border-t border-r border-slate-200 px-2 py-1 font-medium whitespace-nowrap ${labelClass}`}>
+        {label} <span className="text-[11px] font-normal text-slate-400">ít nhất</span>
+      </td>
+      <td className="border-t border-slate-200" />
+      <td className="border-t border-slate-200" />
+      {dates.map((d) => {
+        const c = cell(d);
+        const tone = !c
+          ? "text-slate-300"
+          : c.min === 0
+            ? "bg-rose-50 text-rose-700 font-semibold"
+            : c.min === 1
+              ? "bg-amber-50 text-amber-800"
+              : "";
+        return (
+          <td
+            key={d}
+            className={`border-t border-l border-slate-200 px-1 py-1 text-center ${tone} ${
+              c?.short ? "outline outline-2 -outline-offset-2 outline-rose-500" : ""
+            }`}
+            title={c?.short ? `Thiếu: cần ít nhất ${c.need}` : undefined}
+          >
+            {c ? c.min : "–"}
+            {c?.short && <span className="block text-[10px] leading-none">cần {c.need}</span>}
+          </td>
+        );
+      })}
       <td className="border-t border-l border-slate-200" />
       <td className="border-t border-l border-slate-200" />
     </tr>
