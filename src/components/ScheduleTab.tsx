@@ -39,7 +39,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
   const { schedule, validation, generate, isLocked, openDates } = store;
   const [selected, setSelected] = useState<{ employeeId: string; date: string } | null>(null);
   // Mặc định: điện thoại -> xem theo ngày, màn lớn -> bảng tháng.
-  const [view, setView] = useState<"grid" | "day" | "week" | "coverage">(() =>
+  const [view, setView] = useState<"grid" | "day" | "coverage">(() =>
     typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches ? "day" : "grid",
   );
   const [weekIndex, setWeekIndex] = useState(0);
@@ -54,15 +54,8 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
     [schedule.year, schedule.month],
   );
 
-  /**
-   * Tage, die im Raster gezeigt werden. In der Wochenansicht nur die der
-   * gewählten Woche – gerechnet wird trotzdem immer mit dem ganzen Monat,
-   * die Summen rechts bleiben also Monatssummen.
-   */
-  const gridDates = useMemo(() => {
-    if (view !== "week") return dates;
-    return weeks[Math.min(weekIndex, weeks.length - 1)]?.dates ?? dates;
-  }, [view, weekIndex, weeks, dates]);
+  // Bảng tháng luôn hiện cả tháng (đã bỏ chế độ xem theo tuần).
+  const gridDates = dates;
 
   // Tra nhanh: employeeId#date -> ALLE Dienste des Tages.
   //
@@ -234,15 +227,6 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
             Theo ngày
           </button>
           <button
-            onClick={() => setView("week")}
-            aria-pressed={view === "week"}
-            className={`px-3 py-1.5 text-sm rounded-md ${
-              view === "week" ? "bg-slate-900 text-white" : "text-slate-600"
-            }`}
-          >
-            Theo tuần
-          </button>
-          <button
             onClick={() => setView("grid")}
             aria-pressed={view === "grid"}
             className={`px-3 py-1.5 text-sm rounded-md ${
@@ -263,8 +247,8 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
         </div>
       )}
 
-      {/* Wochenwahl für Dienstplan und Besetzungsdiagramm. */}
-      {hasEmployees && (view === "week" || view === "coverage") && (
+      {/* Wochenwahl für das Besetzungsdiagramm. */}
+      {hasEmployees && view === "coverage" && (
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {weeks.map((w, idx) => {
             const printed = (schedule.printedWeeks ?? []).includes(w.weekStart);
@@ -285,7 +269,6 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
               </button>
             );
           })}
-          {view === "week" && <span className="text-xs text-slate-500">In tuần ở tab „Bảng chấm công".</span>}
         </div>
       )}
 
@@ -303,8 +286,8 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
         </div>
       )}
 
-      {/* Chú thích (bảng tháng và bảng tuần dùng chung lưới) */}
-      {(view === "grid" || view === "week") && (
+      {/* Chú thích bảng tháng */}
+      {view === "grid" && (
         <div className="flex flex-wrap gap-3 mb-2 text-xs text-slate-600">
           <span className="inline-flex items-center gap-1">
             <span className="inline-block h-3 w-3 rounded border shift-early" /> Ca sáng

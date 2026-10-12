@@ -2,9 +2,7 @@ import { useMemo, useState } from "react";
 import type { UseScheduleReturn } from "../hooks/useSchedule";
 import type { Employee } from "../types";
 import { StundenzettelPage } from "./StundenzettelPage";
-import type { SchedulePrintLayout } from "./SchedulePrintPage";
 import {
-  buildDienstplanPdf,
   buildStundenzettelPdf,
   deliver,
   safeFileName,
@@ -13,23 +11,12 @@ import {
 import { chromeIntentUrl, detectInAppBrowser } from "../lib/inAppBrowser";
 import { isScheduleYearAllowed, SCHEDULE_YEAR_RANGE_LABEL } from "../lib/years";
 import { weeksOfMonth } from "../lib/weeks";
-import { datesOfMonth } from "../lib/demand";
-import { monthLabel } from "../lib/shiftOps";
 import { effectiveWeekdayKey } from "../lib/workHours";
 import { publicHolidays } from "../lib/holidays";
 
-/** Dienstplan-Ausdruck (Monat oder eine Woche), evtl. auf eine Person gefiltert. */
-type ScheduleRange = {
-  dates: string[];
-  title: string;
-  layout: SchedulePrintLayout;
-  employeeIds?: string[];
-  /** Gesetzt bei einer Woche: nach dem Ausgeben wird der Monat gesperrt. */
-  weekStart?: string;
-};
-
 export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
-  const { schedule, isLocked, markWeekPrinted, unlockMonth, generate } = store;
+  // Nur Stundenzettel werden ausgegeben – den Dienstplan druckt die App nicht mehr.
+  const { schedule, isLocked, unlockMonth, generate } = store;
 
   const hasSplitSunday = useMemo(() => {
     const holidays = publicHolidays(schedule.year);
@@ -56,8 +43,7 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
   // ── Auswahl: WER (eine Person oder der ganze Laden) und WAS ─────────────
   // who: "all" = ganzer Laden, sonst eine employeeId.
   const [who, setWho] = useState<string>("all");
-  // what: "stundenzettel" (Monats-Stundenzettel) | "month" (Dienstplan Monat)
-  //       | ein weekStart (Dienstplan dieser Woche).
+  // what: "stundenzettel" (Monats-Stundenzettel) | "sz-<weekStart>" (eine Woche).
   const [what, setWhat] = useState<string>("stundenzettel");
 
   const weeks = useMemo(
@@ -88,7 +74,6 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
   // Für die Vorschau und die Dateinamen: eine konkrete Person.
   const previewEmployee =
     who === "all" ? schedule.employees[0] ?? null : chosenEmployees[0] ?? null;
-  const employeeIds = who === "all" ? undefined : [who];
   const whoTag = who === "all" ? "tat_ca" : safeFileName(previewEmployee?.name ?? who);
 
   const startPdf = () => {
@@ -133,34 +118,6 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
       const blob = doc.output("blob");
       if (!inApp.inApp) await deliver(blob, filename);
       finishPdf(blob, filename);
-    } catch (err) {
-      setPdfError(errorText(err));
-    } finally {
-      setPdfBusy(false);
-      setPdfProgress("");
-    }
-  }
-
-  /**
-   * PDF des Dienstplans (Monat oder Woche) – ebenfalls gezeichnet, nicht
-   * fotografiert. Eine Woche sperrt danach den Monat.
-   */
-  async function doPdfSchedule(range: ScheduleRange, filename: string) {
-    if (range.dates.length === 0 || pdfBusy) return;
-    startPdf();
-    setPdfProgress("");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    try {
-      const doc = buildDienstplanPdf(schedule, {
-        dates: range.dates,
-        title: range.title,
-        layout: range.layout,
-        employeeIds: range.employeeIds,
-      });
-      const blob = doc.output("blob");
-      if (!inApp.inApp) await deliver(blob, filename);
-      finishPdf(blob, filename);
-      if (range.weekStart) markWeekPrinted(range.weekStart);
     } catch (err) {
       setPdfError(errorText(err));
     } finally {
@@ -227,29 +184,6 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
     </div>
   );
 
-  // Was genau ist gewählt? Baut den passenden Ausdruck-Auftrag.
-  function scheduleRangeFor(target: string): ScheduleRange | null {
-    if (target === "month") {
-      return {
-        dates: datesOfMonth(schedule.year, schedule.month),
-        title: monthLabel(schedule.year, schedule.month),
-        // 31 Tagesspalten passen nicht hochkant auf A4.
-        layout: "byDate",
-        employeeIds,
-      };
-    }
-    const w = weeks.find((x) => x.weekStart === target);
-    if (!w) return null;
-    return {
-      dates: w.dates,
-      title: `Woche ${w.label} · ${monthLabel(schedule.year, schedule.month)}`,
-      // Leute untereinander, Tage nebeneinander – bei 7 Spalten gut auf Papier.
-      layout: "byEmployee",
-      employeeIds,
-      weekStart: w.weekStart,
-    };
-  }
-
   // Wochen-Stundenzettel: nur die Tage dieser Woche, mit Wochentitel oben rechts.
   function szWeekFor(weekStart: string): { dates: string[]; label: string } | null {
     const w = weeks.find((x) => x.weekStart === weekStart);
@@ -262,18 +196,11 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
       void doPdf(chosenEmployees, `Stundenzettel_${whoTag}_${monthTag}.pdf`);
       return;
     }
-    if (what.startsWith("sz-")) {
-      const weekStart = what.slice(3);
-      const sz = szWeekFor(weekStart);
-      if (sz) {
-        void doPdf(chosenEmployees, `Stundenzettel_${whoTag}_${monthTag}_tuan_${weekStart}.pdf`, sz);
-      }
-      return;
+    const weekStart = what.slice(3);
+    const sz = szWeekFor(weekStart);
+    if (sz) {
+      void doPdf(chosenEmployees, `Stundenzettel_${whoTag}_${monthTag}_tuan_${weekStart}.pdf`, sz);
     }
-    const range = scheduleRangeFor(what);
-    if (!range) return;
-    const suffix = what === "month" ? "thang" : `tuan_${what}`;
-    void doPdfSchedule(range, `Dienstplan_${whoTag}_${suffix}_${monthTag}.pdf`);
   }
 
   // Vùng in KHÔNG được dọn theo sự kiện "afterprint": trên Android sự kiện đó
@@ -344,16 +271,6 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
                     Bảng chấm công (Stundenzettel) — tuần {w.label}
                   </option>
                 ))}
-                <option value="month">Lịch làm việc — cả tháng</option>
-                {weeks.map((w) => {
-                  const printed = (schedule.printedWeeks ?? []).includes(w.weekStart);
-                  return (
-                    <option key={w.weekStart} value={w.weekStart}>
-                      Lịch làm việc — tuần {w.label}
-                      {printed ? " ✓ (đã xuất)" : ""}
-                    </option>
-                  );
-                })}
               </select>
             </label>
 
@@ -466,9 +383,7 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
 
           <p className="mt-2 text-xs text-slate-500">
             <b>Bảng chấm công (Stundenzettel)</b> theo mẫu tiếng Đức để nộp — một tờ mỗi người, chọn
-            cả tháng hoặc từng tuần. <b>Lịch làm việc</b> là lịch treo ở quán (cả tháng hoặc từng
-            tuần, cho cả quán hoặc một người). <b>Xuất lịch một tuần sẽ khóa lịch tháng</b> để bản
-            đã xuất luôn khớp với hệ thống. Trên máy tính, Chrome và Safari, PDF tải thẳng về máy; mở
+            cả tháng hoặc từng tuần. Trên máy tính, Chrome và Safari, PDF tải thẳng về máy; mở
             app từ link trong Zalo/Messenger/Facebook thì bấm <b>Lưu / Chia sẻ PDF</b> sau khi tạo.
           </p>
 
