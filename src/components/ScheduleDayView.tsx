@@ -73,8 +73,8 @@ export function ScheduleDayView({
     return map;
   }, [shiftsOfDay]);
 
-  const working = schedule.employees.filter((e) => shiftsByEmp.has(e.id));
-  const free = schedule.employees.filter((e) => !shiftsByEmp.has(e.id));
+  const working = store.monthEmployees.filter((e) => shiftsByEmp.has(e.id));
+  const free = store.monthEmployees.filter((e) => !shiftsByEmp.has(e.id));
 
   const totalMin = shiftsOfDay.reduce((a, s) => a + s.paidMinutes, 0);
   const earlyCount = shiftsOfDay.filter((s) => s.shiftType === "EARLY").length;

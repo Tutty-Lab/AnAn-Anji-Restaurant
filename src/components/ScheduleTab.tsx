@@ -97,7 +97,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
 
   // Tổng theo ngày cho các dòng chân bảng. Theo nhóm: số NGƯỜI (ca gãy trưa + tối tính 1).
   const dayStats = useMemo(() => {
-    const employeesById = new Map(schedule.employees.map((e) => [e.id, e] as const));
+    const employeesById = new Map(store.monthEmployees.map((e) => [e.id, e] as const));
     const stats = new Map<string, {
       people: Set<string>; shifts: number; total: number; early: number; late: number;
       kitchen: Set<string>; service: Set<string>; driver: Set<string>;
@@ -117,8 +117,8 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
       (group === "KITCHEN" ? st.kitchen : group === "DRIVER" ? st.driver : st.service).add(s.employeeId);
     }
     return stats;
-  }, [dates, schedule.shifts, schedule.employees]);
-  const hasDrivers = schedule.employees.some((e) => e.workRole === "DRIVER");
+  }, [dates, schedule.shifts, store.monthEmployees]);
+  const hasDrivers = store.monthEmployees.some((e) => e.workRole === "DRIVER");
 
   // Bếp/Phục vụ ít nhất có mặt trong từng khung giờ (lúc vắng nhất của khung),
   // để thấy ngay chỗ chỉ còn 0–1 người. `need` = mức tối thiểu theo quy tắc của
@@ -127,8 +127,8 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
     const result = new Map<string, Map<string, Coverage | null>>();
     const holidays = publicHolidays(schedule.year);
     const overrideMap = Object.fromEntries(schedule.dateOverrides.map((o) => [o.date, o]));
-    const groupById = new Map(schedule.employees.map((e) => [e.id, staffGroupOf(e)] as const));
-    const present = presentGroups(schedule.employees);
+    const groupById = new Map(store.monthEmployees.map((e) => [e.id, staffGroupOf(e)] as const));
+    const present = presentGroups(store.monthEmployees);
     for (const d of dates) {
       const perWindow = new Map<string, Coverage | null>();
       result.set(d, perWindow);
@@ -157,7 +157,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
       }
     }
     return result;
-  }, [dates, schedule, store.profile]);
+  }, [dates, schedule, store.profile, store.monthEmployees]);
 
   const hasSplitSunday = useMemo(() => {
     const holidays = publicHolidays(schedule.year);
@@ -311,7 +311,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
       ) : view === "day" ? (
         <ScheduleDayView store={store} onEdit={(employeeId, date) => setSelected({ employeeId, date })} />
       ) : view === "coverage" ? (
-        <CoverageChart schedule={schedule} profile={store.profile} dates={weeks[Math.min(weekIndex, weeks.length - 1)]?.dates ?? dates} />
+        <CoverageChart schedule={{ ...schedule, employees: store.monthEmployees }} profile={store.profile} dates={weeks[Math.min(weekIndex, weeks.length - 1)]?.dates ?? dates} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white -mx-3 sm:mx-0">
           <table className="border-collapse text-xs">
@@ -362,7 +362,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
               </tr>
             </thead>
             <tbody>
-              {schedule.employees.map((emp) => {
+              {store.monthEmployees.map((emp) => {
                 const sum = summaryByEmp.get(emp.id);
                 const sollMin = monthlyTargetMinutesFor(emp, openDates, schedule.workHours);
                 const diff = sum?.diffMinutes ?? -sollMin;

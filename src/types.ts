@@ -90,6 +90,14 @@ export type Employee = {
    * Sechs-Tage-Regel begrenzt.
    */
   maxDaysPerWeek?: number;
+  /**
+   * „Làm được cả Bếp và Phục vụ/Bồi": die Person kann für einen ganzen Monat in
+   * die andere Rolle wechseln (z. B. zu wenig Service → ein Koch macht den Monat
+   * Service). Nur dann ist roleByMonth wirksam. Nicht für Fahrer.
+   */
+  canSwitchRole?: boolean;
+  /** Rolle für einzelne Monate (Schlüssel yyyy-MM), sonst workRole. */
+  roleByMonth?: Record<string, WorkRole>;
 };
 
 export type Shift = {

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { canSwitchRoleFor, isRoleSwitchedInMonth, monthKeyOf, monthRole } from "../lib/monthRole";
 import type { UseScheduleReturn } from "../hooks/useSchedule";
 import type { DateRange, Employee, EmploymentType, WorkRole } from "../types";
 import { splitTargetHours } from "../lib/splitTargetHours";
@@ -76,6 +77,9 @@ type Draft = {
   endDate: string; // "yyyy-MM-dd" hoặc "" = vẫn làm
   /** Cùng người này ở quán khác: storeId -> employeeId ("" = không). */
   partners: PartnerChoice;
+  /** „Làm được cả Bếp và Phục vụ" – đổi nhóm cả tháng khi thiếu người. */
+  canSwitchRole: boolean;
+  roleByMonth: Record<string, WorkRole>;
 };
 
 /** Der andere Laden, wie ihn das Feld „Cũng làm ở quán khác" braucht. */
@@ -99,6 +103,8 @@ function draftFrom(emp?: Employee, partners: PartnerChoice = {}): Draft {
     startDate: emp?.startDate ?? "",
     endDate: emp?.endDate ?? "",
     partners,
+    canSwitchRole: emp?.canSwitchRole === true,
+    roleByMonth: { ...(emp?.roleByMonth ?? {}) },
   };
 }
 
@@ -168,6 +174,13 @@ function draftToEmployee(d: Draft): Omit<Employee, "id"> {
     // Leeres Feld = von Monatsanfang an dabei (kein Eintrittsdatum).
     startDate: ISO_DATE.test(d.startDate) ? d.startDate : undefined,
     endDate: ISO_DATE.test(d.endDate) ? d.endDate : undefined,
+    canSwitchRole: d.canSwitchRole && canSwitchRoleFor(d.role || undefined) ? true : undefined,
+    // Nur Monate mit ANDERER Rolle als der Hauptrolle aufheben.
+    roleByMonth: (() => {
+      if (!d.canSwitchRole || !canSwitchRoleFor(d.role || undefined)) return undefined;
+      const kept = Object.fromEntries(Object.entries(d.roleByMonth).filter(([, role]) => role !== d.role));
+      return Object.keys(kept).length > 0 ? kept : undefined;
+    })(),
   };
 }
 
@@ -245,7 +258,7 @@ export function EmployeesTab({ store, allStores }: { store: UseScheduleReturn; a
                 onClick={() => setOffen(emp.id)}
                 className="w-full text-left rounded-lg border border-slate-200 p-3 flex items-center gap-3 hover:bg-slate-50 active:bg-slate-100 transition-colors"
               >
-                <EmployeeSummaryRow emp={emp} openDates={openDates} workHours={schedule.workHours} profile={profile} sharedWith={partnerLabel(emp)} />
+                <EmployeeSummaryRow emp={emp} year={schedule.year} month={schedule.month} openDates={openDates} workHours={schedule.workHours} profile={profile} sharedWith={partnerLabel(emp)} />
                 <span className="text-slate-300 text-lg leading-none">›</span>
               </button>
             </li>
@@ -267,6 +280,8 @@ export function EmployeesTab({ store, allStores }: { store: UseScheduleReturn; a
         <EmployeeSheet
           key={bearbeitet?.id ?? "new"}
           employee={bearbeitet}
+          year={schedule.year}
+          month={schedule.month}
           openDates={openDates}
           workHours={schedule.workHours}
           profile={profile}
@@ -300,12 +315,16 @@ export function EmployeesTab({ store, allStores }: { store: UseScheduleReturn; a
 /** Kompakte Zeile in der Liste: Name, Art, Bereich, Vertrag, Besonderheiten. */
 function EmployeeSummaryRow({
   emp,
+  year,
+  month,
   openDates,
   workHours,
   profile,
   sharedWith,
 }: {
   emp: Employee;
+  year: number;
+  month: number;
   openDates: readonly string[];
   workHours: WorkHoursConfig;
   profile: StoreProfile;
@@ -330,6 +349,11 @@ function EmployeeSummaryRow({
         <span className={`shrink-0 rounded text-[11px] px-1.5 py-0.5 ${ROLE_BADGE[emp.workRole ?? "NONE"]}`}>
           {roleLabelVi(emp.workRole, profile)}
         </span>
+        {isRoleSwitchedInMonth(emp, year, month) && (
+          <span className={`shrink-0 rounded text-[11px] px-1.5 py-0.5 ${ROLE_BADGE[monthRole(emp, year, month) ?? "NONE"]}`}>
+            → {roleLabelVi(monthRole(emp, year, month), profile)} T{month}
+          </span>
+        )}
         {sharedWith.length > 0 && (
           <span className="shrink-0 rounded bg-fuchsia-50 text-fuchsia-700 text-[11px] px-1.5 py-0.5">
             cũng làm ở {sharedWith.join(", ")}
@@ -365,6 +389,8 @@ function EmployeeSummaryRow({
  */
 function EmployeeSheet({
   employee,
+  year,
+  month,
   openDates,
   workHours,
   profile,
@@ -375,6 +401,8 @@ function EmployeeSheet({
   onDelete,
 }: {
   employee?: Employee;
+  year: number;
+  month: number;
   openDates: readonly string[];
   workHours: WorkHoursConfig;
   profile: StoreProfile;
@@ -466,6 +494,47 @@ function EmployeeSheet({
               </select>
             </label>
           </div>
+
+          {canSwitchRoleFor(d.role || undefined) && profile.workRoles.includes(d.role === "KITCHEN" ? "SERVICE" : "KITCHEN") && (
+            <div className="rounded-lg border border-slate-200">
+              <label className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <span className="text-sm text-slate-700">
+                  Làm được cả {roleLabelVi("KITCHEN", profile)} và {roleLabelVi("SERVICE", profile)}
+                  <span className="block text-[11px] text-slate-400">
+                    Tháng thiếu người có thể cho làm vị trí kia cả tháng
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={d.canSwitchRole}
+                  onChange={(e) => set("canSwitchRole", e.target.checked)}
+                  className="h-6 w-6 rounded border-slate-300"
+                />
+              </label>
+              {d.canSwitchRole && (
+                <div className="border-t border-slate-100 px-3 py-2.5">
+                  <span className="text-xs text-slate-600">Tháng {month}/{year} làm</span>
+                  <div className="mt-1 inline-flex w-full rounded-lg border border-slate-200 bg-white p-0.5">
+                    {(["KITCHEN", "SERVICE"] as const).map((role) => {
+                      const active = (d.roleByMonth[monthKeyOf(year, month)] ?? d.role) === role;
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => set("roleByMonth", { ...d.roleByMonth, [monthKeyOf(year, month)]: role })}
+                          className={`flex-1 px-3 py-1.5 text-sm rounded-md ${active ? "bg-slate-900 text-white" : "text-slate-600"}`}
+                        >
+                          {roleLabelVi(role, profile)}
+                          {d.role === role ? " (chính)" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">

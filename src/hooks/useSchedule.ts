@@ -24,6 +24,7 @@ import {
 import { datesOfMonth } from "../lib/demand";
 import { publicHolidays } from "../lib/holidays";
 import { initialScheduleFor, profileById, withSharedPersonDefaults, type StoreProfile } from "../lib/stores";
+import { withMonthRoles } from "../lib/monthRole";
 import { contractOpenDays } from "../lib/contract";
 import { weekStartOf } from "../lib/weeks";
 
@@ -60,8 +61,13 @@ function overridesToMap(list: DateOverride[]): OverrideMap {
 function normalizeEmployee(employee: Employee, profile: StoreProfile): Employee {
   // blockedDates gilt nur während der Planung und wird nie gespeichert.
   const { blockedDates: _transient, ...rest } = employee;
+  const known = (role: string | undefined) => role != null && (profile.workRoles as readonly string[]).includes(role);
   const role: string | undefined = rest.workRole;
-  return role == null || (profile.workRoles as readonly string[]).includes(role) ? rest : { ...rest, workRole: undefined };
+  const cleaned = role == null || known(role) ? rest : { ...rest, workRole: undefined };
+  if (!cleaned.roleByMonth) return cleaned;
+  // Monatsrollen, die es in diesem Laden nicht gibt, fallen weg.
+  const roleByMonth = Object.fromEntries(Object.entries(cleaned.roleByMonth).filter(([, r]) => known(r)));
+  return { ...cleaned, roleByMonth: Object.keys(roleByMonth).length > 0 ? roleByMonth : undefined };
 }
 
 /** Migriert einen (evtl. alten) gespeicherten Stand auf das aktuelle Schema. */
@@ -194,9 +200,16 @@ export function useSchedule(storeId: string) {
     return contractOpenDays([...byWeek.values()]);
   }, [openDates]);
 
+  // Rolle dieses Monats („Làm được cả Bếp và Phục vụ" → roleByMonth) für Prüfung,
+  // Độ phủ und Anzeige. Gespeichert bleibt die Hauptrolle.
+  const monthEmployees = useMemo(
+    () => withMonthRoles(schedule.employees, schedule.year, schedule.month),
+    [schedule.employees, schedule.year, schedule.month],
+  );
+
   const validation: ValidationResult = useMemo(
-    () => validateSchedule(schedule.employees, schedule.shifts, schedule.year, openDates, schedule.workHours, profile.dayWeights),
-    [schedule.employees, schedule.shifts, schedule.year, openDates, schedule.workHours, profile],
+    () => validateSchedule(monthEmployees, schedule.shifts, schedule.year, openDates, schedule.workHours, profile.dayWeights),
+    [monthEmployees, schedule.shifts, schedule.year, openDates, schedule.workHours, profile],
   );
 
   /**
@@ -212,7 +225,7 @@ export function useSchedule(storeId: string) {
       month: schedule.month,
       workHours: schedule.workHours,
       overrides: overridesToMap(schedule.dateOverrides),
-      employees: schedule.employees,
+      employees: monthEmployees,
       shifts: schedule.shifts,
       profile,
     });
@@ -222,7 +235,7 @@ export function useSchedule(storeId: string) {
     schedule.month,
     schedule.workHours,
     schedule.dateOverrides,
-    schedule.employees,
+    monthEmployees,
     schedule.shifts,
   ]);
   const peakGaps = schedule.shifts.length === 0 ? [] : analysis.peakViolations;
@@ -386,7 +399,8 @@ export function useSchedule(storeId: string) {
         month,
         workHours: schedule.workHours,
         overrides: overridesToMap(schedule.dateOverrides),
-        employees: schedule.employees,
+        // Rolle des ZIEL-Monats – „Tạo lịch" kann einen anderen Monat planen.
+        employees: withMonthRoles(schedule.employees, year, month),
         profile,
         blockedDays,
         daysPerWeekCap,
@@ -520,6 +534,8 @@ export function useSchedule(storeId: string) {
     storeId,
     profile,
     schedule,
+    /** Mitarbeiter mit der Rolle dieses Monats (Bếp ↔ Phục vụ) – für Anzeige und Độ phủ. */
+    monthEmployees,
     originalShifts,
     validation,
     peakGaps,
