@@ -51,7 +51,7 @@
 - [ ] Ngày **nghỉ** ghi **"Frei"**; ngày **lễ** ghi **tên lễ**; ngày **đóng cửa** ghi **chú thích** đúng.
 - [ ] Số phút **nghỉ giải lao (Pause)** đúng theo **luật đang set** (>6h→30′, >8h→60′; xem [`quy-tac-gio-lam.md`](quy-tac-gio-lam.md)).
 - [ ] **Gesamtstunden** mỗi người = **tổng cột giờ** = **khớp định mức** (Soll).
-- [ ] **Số trang PDF = số nhân viên**; ô **Sollstunden/Differenz để trống** (điền tay).
+- [ ] **Số trang PDF = số nhân viên**; không in **Sollstunden/Differenz** (chỉ in Gesamtstunden).
 - [ ] **Số kiểu Đức** — dấu phẩy thập phân: `6,50` (không phải `6.50`).
 
 ---

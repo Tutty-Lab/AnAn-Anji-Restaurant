@@ -68,7 +68,9 @@ die Küche vor.
   Öffnungszeiten arbeiten.
 - **Weich Anji:** Bồi Mo–Mi mittags 3 / abends 3, Do–So 3 / 4. Bếp
   Vorbereitung 1, mittags 3, abends 4 (Do–Sa).
-- Mittags = Öffnung–14:30, abends = 17:00–Schluss.
+- Weiche Zahlen gelten nur in den Stoßzeiten: mittags = 12:00–14:00, abends =
+  18:00–22:00. Beim Öffnen (11–12, 17–18), 14:00–14:30 und Sa/So 14:30–17:00
+  reicht 1 Bếp + 1 Phục vụ/Bồi. Schluss 22:00–22:30 (weich): 2 Phục vụ/Bồi, 1 Bếp.
 - **Tagesgewichte:** AnAn Mo–Mi 1,0, Do 1,3, Fr/Sa 1,5, So 1,3 · Anji Mo–Mi 1,0,
   Do/Fr 1,5, Sa 1,3, So 1,0.
 

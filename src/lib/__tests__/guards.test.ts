@@ -120,7 +120,7 @@ describe("Bereiche: Bếp, Phục vụ", () => {
     const employees = [staff("k1", "KITCHEN"), staff("s1", "SERVICE")];
     const peaks = peaksOf(employees, employees.map((e) => lunch(e.id)));
     const service = peaks.find((peak) => peak.label === "Phục vụ sáng")!;
-    expect([service.startMinutes, service.endMinutes]).toEqual([11 * 60, 14 * 60 + 30]);
+    expect([service.startMinutes, service.endMinutes]).toEqual([12 * 60, 14 * 60]);
     expect(service.required).toBe(2);
     expect(service.minStaff).toBe(1);
     expect(service.ok).toBe(false);

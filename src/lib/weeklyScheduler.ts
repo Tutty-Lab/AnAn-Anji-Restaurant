@@ -653,8 +653,9 @@ function topUpShortfalls(result: Shift[], employees: Employee[], budgets: Map<st
 /**
  * Ganzen Arbeitstag verlegen: fehlt an einem Tag jemand aus einem Bereich
  * (Fahrer, Service, Küche), wird der Dienst einer Person desselben Bereichs von
- * einem anderen Tag derselben Woche dorthin verlegt – gleiche bezahlte Zeit,
- * gleiche Tageszahl, höchstens 6 Tage am Stück. Nur wenn beide Tage zusammen
+ * einem anderen Tag dorthin verlegt (Wochenvertrag: derselben Woche,
+ * Monatsvertrag: des Monats) – gleiche bezahlte Zeit, höchstens 6 Tage je Woche
+ * und 6 Tage am Stück. Nur wenn beide Tage zusammen
  * besser werden. So fährt z. B. an jedem Abend ein Fahrer, statt an einem Tag
  * zwei und am nächsten keiner.
  */
@@ -694,7 +695,11 @@ function moveWorkDays(result: Shift[], employees: Employee[], ctx: Ctx): Shift[]
         const baseTo = dayScore(to, onTo);
         const partialWeek = openDates.filter((d) => weekStartOf(d) === week).length < ctx.fullWeekDays;
         for (const from of ownDates) {
-          if (weekStartOf(from) !== week) continue;
+          // Wochenvertrag: nur innerhalb der Woche. Monatsvertrag: auch aus einer
+          // anderen Woche – sonst bleibt z. B. ein Montag ohne zweiten Koch, wenn
+          // beide anderen Köche Di–So der Vorwoche gearbeitet haben (7 Tage am Stück).
+          if (weekStartOf(from) !== week && (employee.weeklyHours != null
+            || [...ownDates].filter((d) => weekStartOf(d) === week).length + 1 > dayLimit(employee))) continue;
           const dates = new Set([...ownDates, ...(employee.blockedDates ?? [])]);
           dates.delete(from);
           dates.add(to);

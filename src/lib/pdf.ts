@@ -446,7 +446,6 @@ function drawStundenzettel(
       ["Beschäftigungsart", employmentLabelDe(employee.employmentType)],
       ["Mitarbeiter", employee.name],
       ["Monat", MONTH_NAMES_DE[schedule.month - 1]],
-      ["Sollstunden", null], // von Hand einzutragen
       ["Jahr", String(schedule.year)],
     ],
     startY,
@@ -465,10 +464,9 @@ function drawStundenzettel(
   const summaryY = pageH - 30;
   const col3 = (pageW - 2 * MARGIN) / 3;
 
+  // Nur Gesamtstunden – Sollstunden und Differenz stehen nicht auf dem Zettel.
   const summary: Array<[string, string | null]> = [
     ["Gesamtstunden", `${minutesToDecimalHours(totalMinutes)} h`],
-    ["Sollstunden", null],
-    ["Differenz", null],
   ];
   summary.forEach(([label, value], i) => {
     const x = MARGIN + i * col3;

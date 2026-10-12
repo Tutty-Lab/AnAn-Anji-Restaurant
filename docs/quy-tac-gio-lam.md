@@ -35,10 +35,13 @@ Restaurant AnAn:
 - **Giờ làm** bắt đầu sớm hơn 30′ (T2–T7 10:30, CN/lễ 11:30): **bếp chuẩn bị, đúng 1 người**. Phục vụ và lái xe làm từ giờ mở.
 - **Tối đa 9 giờ công/ngày**; app chặn cả khi xếp tự động lẫn khi sửa tay.
 - **Quy tắc cứng:** từ lúc mở đến lúc đóng cửa luôn có **ít nhất 1 phục vụ và 1 bếp**.
+- **Giờ đông:** trưa **12:00–14:00**, tối **18:00–22:00**. Quy tắc mềm về số người chỉ tính trong giờ đông.
+- **Lúc mở cửa** (11:00–12:00, 17:00–18:00), 14:00–14:30 và T7/CN 14:30–17:00: chỉ cần **1 bếp + 1 phục vụ** (quy tắc cứng).
+- **Đóng cửa 22:00–22:30 (mềm):** 2 phục vụ, 1 bếp.
 - **Quy tắc mềm – Phục vụ (bồi):** T2–T4 sáng 2, chiều 2 · T5–CN sáng 2, chiều 3.
 - **Quy tắc mềm – Bếp:** 10:30 1 người · T2–CN sáng 2 · T5–T7 tối 3 (đông thì 4).
 - **Quy tắc mềm – Lái xe:** chủ yếu tối (18:00–21:00, CN/lễ 18:00–22:00): trong tuần 1 người, CN luôn 2. Giờ hợp đồng dư thì làm thêm buổi trưa.
-- Sáng = mở cửa – 14:30, chiều/tối = 17:00 – đóng cửa. T7/CN 14:30–17:00 chỉ áp dụng quy tắc cứng.
+- Sáng = 12:00–14:00, chiều/tối = 18:00–22:00 (giờ đông).
 - **Nhóm:** Bếp, Phục vụ, Lái xe – theo danh sách chủ quán, admin sửa trong tab Nhân viên. Azubi là nhóm Phục vụ.
 - **Toàn thời gian** (≥ 150h/tháng): ca và giờ làm cố định. **Bán thời gian:** ưu tiên giờ đông.
 - **Hợp đồng theo tháng** (giờ bảng lương) xếp theo bậc 30′, không vượt. Ngày vào làm / ngày thôi làm chặn các ngày ngoài hợp đồng.
@@ -48,6 +51,7 @@ Restaurant Anji (cùng app, cùng giờ mở và giờ làm như AnAn):
 - **Quy tắc cứng:** luôn có **ít nhất 1 bồi và 1 bếp**.
 - **Quy tắc mềm – Bồi:** T2–T4 sáng 3, chiều 3 · T5–CN sáng 3, chiều 4.
 - **Quy tắc mềm – Bếp:** 10:30 1 người · T2–CN sáng 3 · T5–T7 tối 4.
+- Giờ đông, mở cửa 1 + 1 và đóng cửa 22:00–22:30 (2 bồi, 1 bếp) như AnAn.
 - **Nhóm:** Bếp, Bồi (không có lái xe). Ha Phuong Nguyen, Quang Tien La, Tien Viet Pham là Azubi làm bồi.
 
 Người làm cả hai quán (Thi Thuy Nhu, Huy Nam Nguyen, Hong Son Le – nối ở mục „Cũng làm ở quán khác"):

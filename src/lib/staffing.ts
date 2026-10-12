@@ -87,6 +87,16 @@ export const LUNCH_END = 14 * 60 + 30;
 export const EVENING_START = 17 * 60;
 
 /**
+ * Stoßzeiten (Vorgabe des Betriebs): mittags 12–14 Uhr, abends 18–22 Uhr. Nur
+ * dann gelten die weichen Besetzungszahlen. Beim Öffnen (11–12, 17–18) und kurz
+ * vor 14:30 reicht die harte Regel: 1 Bếp + 1 Phục vụ/Bồi.
+ */
+export const LUNCH_PEAK = { startMinutes: 12 * 60, endMinutes: 14 * 60 };
+export const EVENING_PEAK = { startMinutes: 18 * 60, endMinutes: 22 * 60 };
+/** Schluss am Abend (22:00–22:30): etwas mehr als 1 + 1 – 2 Phục vụ/Bồi, 1 Bếp. */
+export const CLOSING_WINDOW = { startMinutes: 22 * 60, endMinutes: 22 * 60 + 30 };
+
+/**
  * Eine Besetzungsregel: WO (Zeitspanne je Öffnungsblock), WER (Bereiche) und WIE VIELE.
  *
  * minStaff/maxStaff sind der Wert eines Normaltags (Gewicht 1,0). Bei
@@ -127,25 +137,28 @@ const MON_WED: readonly WeekdayKey[] = ["monday", "tuesday", "wednesday"];
 const THU_SUN: readonly WeekdayKey[] = ["thursday", "friday", "saturday", "sunday"];
 const THU_SAT: readonly WeekdayKey[] = ["thursday", "friday", "saturday"];
 const MON_SAT: readonly WeekdayKey[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-const lunch = clip(0, LUNCH_END);
-const evening = clip(EVENING_START, 24 * 60);
+const lunch = clip(LUNCH_PEAK.startMinutes, LUNCH_PEAK.endMinutes);
+const evening = clip(EVENING_PEAK.startMinutes, EVENING_PEAK.endMinutes);
+const closing = clip(CLOSING_WINDOW.startMinutes, CLOSING_WINDOW.endMinutes);
 
 // Restaurant AnAn (Vorgabe des Betriebs).
 // Hart: von Öffnung bis Schluss immer mindestens 1 Phục vụ (Service) und 1 Bếp
 // (Küche) – die Küche ab der Vorbereitung, der Service ab Öffnung.
 // Weich: Phục vụ T2–T4 sáng 2 / chiều 2, T5–CN sáng 2 / chiều 3; Bếp 10:30 1 người,
-// sáng 2 (T2–CN), tối 3 (T5–T7, đông thì 4). „Sáng" = Öffnung–14:30,
-// „chiều/tối" = 17:00–Schluss. Sa/So/Feiertag (durchgehend) gilt 14:30–17:00 nur
-// die harte Regel. Lái xe: trong tuần 1 người mỗi tối, CN (và lễ) luôn 2.
+// sáng 2 (T2–CN), tối 3 (T5–T7, đông thì 4). „Sáng" = 12:00–14:00,
+// „chiều/tối" = 18:00–22:00 (Stoßzeiten). Öffnen (11–12, 17–18), 14:00–14:30 und
+// Sa/So/Feiertag 14:30–17:00: nur die harte Regel. Schluss 22:00–22:30: 2 Phục vụ,
+// 1 Bếp. Lái xe: trong tuần 1 người mỗi tối, CN (và lễ) luôn 2.
 const ANAN_RULES: readonly StaffingRule[] = [
   { label: "Bếp luôn có người", when: "suốt giờ làm (gồm 30′ chuẩn bị)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["KITCHEN"], windows: wholeBlocks },
   { label: "Phục vụ luôn có người", when: "suốt giờ mở cửa (gồm người chưa gán nhóm)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["SERVICE"], windows: (blocks) => guestBlocks(blocks) },
   { label: "Bếp chuẩn bị", when: "30′ trước giờ mở (T2–T7 10:30, CN/lễ 11:30)", minStaff: 1, maxStaff: 1, scaled: false, hard: false, groups: ["KITCHEN"], windows: prepWindow },
-  { label: "Phục vụ sáng", when: "mở cửa – 14:30", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], windows: lunch },
-  { label: "Phục vụ chiều T2–T4", when: "17:00 – đóng cửa", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: MON_WED, windows: evening },
-  { label: "Phục vụ chiều T5–CN", when: "17:00 – đóng cửa", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: THU_SUN, windows: evening },
-  { label: "Bếp sáng", when: "mở cửa – 14:30", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], windows: lunch },
-  { label: "Bếp tối T5–T7", when: "17:00 – đóng cửa (đông thì 4)", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], weekdays: THU_SAT, windows: evening },
+  { label: "Phục vụ sáng", when: "12:00 – 14:00 (giờ đông)", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], windows: lunch },
+  { label: "Phục vụ chiều T2–T4", when: "18:00 – 22:00 (giờ đông)", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: MON_WED, windows: evening },
+  { label: "Phục vụ chiều T5–CN", when: "18:00 – 22:00 (giờ đông)", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: THU_SUN, windows: evening },
+  { label: "Bếp sáng", when: "12:00 – 14:00 (giờ đông)", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], windows: lunch },
+  { label: "Bếp tối T5–T7", when: "18:00 – 22:00 (đông thì 4)", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], weekdays: THU_SAT, windows: evening },
+  { label: "Phục vụ đóng cửa", when: "22:00 – 22:30 (2 phục vụ, 1 bếp)", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], windows: closing },
   {
     label: "Lái xe", when: "18:00–21:00 (T2–T7)", minStaff: 1, maxStaff: 2, scaled: false, hard: false, groups: ["DRIVER"],
     weekdays: MON_SAT, windows: clip(DRIVER_HOURS.default.startMinutes, DRIVER_HOURS.default.endMinutes),
@@ -160,16 +173,18 @@ const ANAN_RULES: readonly StaffingRule[] = [
 // Hart: immer mindestens 1 Bồi (Service) und 1 Bếp (Küche) – die Küche ab der
 // Vorbereitung, der Service ab Öffnung.
 // Weich: Bồi T2–T4 sáng 3 / chiều 3, T5–CN sáng 3 / chiều 4; Bếp 10:30 1 người,
-// sáng 3 (T2–CN), tối 4 (T5–T7). Keine Fahrer.
+// sáng 3 (T2–CN), tối 4 (T5–T7). Zeiten wie AnAn: sáng 12–14, tối 18–22, Öffnen
+// nur 1 + 1, Schluss 22:00–22:30 2 Bồi + 1 Bếp. Keine Fahrer.
 const ANJI_RULES: readonly StaffingRule[] = [
   { label: "Bếp luôn có người", when: "suốt giờ làm (gồm 30′ chuẩn bị)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["KITCHEN"], windows: wholeBlocks },
   { label: "Bồi luôn có người", when: "suốt giờ mở cửa (gồm người chưa gán nhóm)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["SERVICE"], windows: (blocks) => guestBlocks(blocks) },
   { label: "Bếp chuẩn bị", when: "30′ trước giờ mở (T2–T7 10:30, CN/lễ 11:30)", minStaff: 1, maxStaff: 1, scaled: false, hard: false, groups: ["KITCHEN"], windows: prepWindow },
-  { label: "Bồi sáng", when: "mở cửa – 14:30", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], windows: lunch },
-  { label: "Bồi chiều T2–T4", when: "17:00 – đóng cửa", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: MON_WED, windows: evening },
-  { label: "Bồi chiều T5–CN", when: "17:00 – đóng cửa", minStaff: 4, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: THU_SUN, windows: evening },
-  { label: "Bếp sáng", when: "mở cửa – 14:30", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], windows: lunch },
-  { label: "Bếp tối T5–T7", when: "17:00 – đóng cửa", minStaff: 4, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], weekdays: THU_SAT, windows: evening },
+  { label: "Bồi sáng", when: "12:00 – 14:00 (giờ đông)", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], windows: lunch },
+  { label: "Bồi chiều T2–T4", when: "18:00 – 22:00 (giờ đông)", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: MON_WED, windows: evening },
+  { label: "Bồi chiều T5–CN", when: "18:00 – 22:00 (giờ đông)", minStaff: 4, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], weekdays: THU_SUN, windows: evening },
+  { label: "Bếp sáng", when: "12:00 – 14:00 (giờ đông)", minStaff: 3, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], windows: lunch },
+  { label: "Bếp tối T5–T7", when: "18:00 – 22:00 (giờ đông)", minStaff: 4, maxStaff: Infinity, scaled: false, hard: false, groups: ["KITCHEN"], weekdays: THU_SAT, windows: evening },
+  { label: "Bồi đóng cửa", when: "22:00 – 22:30 (2 bồi, 1 bếp)", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, groups: ["SERVICE"], windows: closing },
 ];
 
 /** Mindest-/Höchstzahl einer Regel an einem Wochentag (Gewicht angewandt, aufgerundet). */
@@ -226,23 +241,26 @@ export const PEAK_LEVEL = 1.5;
 
 export type DemandProfile = { default: readonly DemandBand[]; sunday: readonly DemandBand[] };
 
-const EVENING: readonly DemandBand[] = [
-  band("17:00", "17:30", 1.1, "Mở ca tối"),
-  band("17:30", "18:00", 1.25, "Trước cao điểm"),
-  band("18:00", "18:30", 1.4, "Vào cao điểm"),
-  band("18:30", "20:30", 1.5, "Cao điểm tối"),
-  band("20:30", "21:30", 1.4, "Sau cao điểm"),
-  band("21:30", "22:30", 1.25, "Đóng cửa"),
-];
-
-/** Đường nhu cầu: trưa = lunch, chiều 14:30–17:00 (T7, CN mở liền) = afternoon. */
-function demandProfile(lunch: number, afternoon: number, afternoonLabel: string): DemandProfile {
-  const AFTERNOON = [band("14:30", "17:00", afternoon, afternoonLabel)];
+/**
+ * Đường nhu cầu: đông trưa 12:00–14:00 (= lunch) và tối 18:00–22:00. Lúc mở cửa
+ * (11:00–12:00, 17:00–18:00), 14:00–14:30 và chiều 14:30–17:00 (T7, CN mở liền)
+ * chỉ 1 bếp + 1 phục vụ (= quiet). Đóng cửa 22:00–22:30 hơn chút (= closing).
+ */
+function demandProfile(lunch: number, quiet: number, closing: number, quietLabel: string): DemandProfile {
+  const AFTERNOON = [band("14:00", "14:30", quiet, "Cuối trưa"), band("14:30", "17:00", quiet, quietLabel)];
+  const EVENING = [
+    band("17:00", "18:00", quiet, "Mở ca tối"),
+    band("18:00", "18:30", 1.4, "Vào cao điểm"),
+    band("18:30", "20:30", 1.5, "Cao điểm tối"),
+    band("20:30", "21:30", 1.4, "Sau cao điểm"),
+    band("21:30", "22:00", 1.25, "Cuối cao điểm"),
+    band("22:00", "22:30", closing, "Đóng cửa"),
+  ];
   return {
     // T2–T7. 14:30–17:00 chỉ dùng ở T7 (mở liền); T2–T6 đóng giờ đó.
-    default: [band("10:30", "11:00", 0.2, "Bếp chuẩn bị"), band("11:00", "14:30", lunch, "Trưa"), ...AFTERNOON, ...EVENING],
-    // CN và ngày lễ mở từ 12:00, bếp chuẩn bị từ 11:30.
-    sunday: [band("11:30", "12:00", 0.2, "Bếp chuẩn bị"), band("12:00", "14:30", lunch, "Trưa"), ...AFTERNOON, ...EVENING],
+    default: [band("10:30", "11:00", 0.2, "Bếp chuẩn bị"), band("11:00", "12:00", quiet, "Mở cửa"), band("12:00", "14:00", lunch, "Trưa"), ...AFTERNOON, ...EVENING],
+    // CN và ngày lễ mở từ 12:00 (vào thẳng giờ đông), bếp chuẩn bị từ 11:30.
+    sunday: [band("11:30", "12:00", 0.2, "Bếp chuẩn bị"), band("12:00", "14:00", lunch, "Trưa"), ...AFTERNOON, ...EVENING],
   };
 }
 
@@ -277,8 +295,8 @@ export const ANAN_PROFILE: StoreProfile = {
   // Küche abends Do–Sa 3. Fr/Sa 1,5, Do/So 1,3, Mo–Mi 1,0.
   dayWeights: { monday: 1.0, tuesday: 1.0, wednesday: 1.0, thursday: 1.3, friday: 1.5, saturday: 1.5, sunday: 1.3 },
   staffingRules: ANAN_RULES,
-  // Trưa 2 phục vụ + 2 bếp, chiều (T7, CN) 1 + 1, tối 3–6 người.
-  demand: demandProfile(1.0, 0.45, "Chiều vắng (chỉ 1 phục vụ + 1 bếp)"),
+  // Trưa 2 phục vụ + 2 bếp, mở cửa và chiều 1 + 1, tối 3–6 người, đóng cửa 2 + 1.
+  demand: demandProfile(1.0, 0.45, 0.7, "Chiều vắng (chỉ 1 phục vụ + 1 bếp)"),
   groupLabels: { KITCHEN: "Bếp", SERVICE: "Phục vụ", DRIVER: "Lái xe" },
   workRoles: ["KITCHEN", "SERVICE", "DRIVER"],
 };
@@ -293,8 +311,8 @@ export const ANJI_PROFILE: StoreProfile = {
   // Do–Fr ≈ 7,3, Sa ≈ 6,1, So ≈ 4,6 – auf Mo = 1,0 normiert.
   dayWeights: { monday: 1.0, tuesday: 1.0, wednesday: 1.0, thursday: 1.5, friday: 1.5, saturday: 1.3, sunday: 1.0 },
   staffingRules: ANJI_RULES,
-  // Trưa 3 bồi + 3 bếp, chiều (T7, CN) 1 + 1, tối 6–8 người.
-  demand: demandProfile(1.1, 0.35, "Chiều vắng (chỉ 1 bồi + 1 bếp)"),
+  // Trưa 3 bồi + 3 bếp, mở cửa và chiều 1 + 1, tối 6–8 người, đóng cửa 2 + 1.
+  demand: demandProfile(1.1, 0.35, 0.55, "Chiều vắng (chỉ 1 bồi + 1 bếp)"),
   groupLabels: { KITCHEN: "Bếp", SERVICE: "Bồi", DRIVER: "Lái xe" },
   workRoles: ["KITCHEN", "SERVICE"],
 };
