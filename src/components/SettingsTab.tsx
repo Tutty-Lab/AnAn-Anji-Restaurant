@@ -143,7 +143,7 @@ function BlockRow({
 
 export function SettingsTab({ store }: { store: UseScheduleReturn }) {
   const { schedule, updateMeta, upsertOverride, removeOverride, changePassword } = store;
-  // Checklist G: chỉ 2026–2030. Năm cũ ngoài khoảng (dữ liệu đã lưu) vẫn hiện để
+  // Chỉ 2023–2027 (years.ts). Năm cũ ngoài khoảng (dữ liệu đã lưu) vẫn hiện để
   // ô chọn không trống, nhưng không chọn lại được và không tạo/in lịch được.
   const years = isScheduleYearAllowed(schedule.year) ? SCHEDULE_YEARS : [schedule.year, ...SCHEDULE_YEARS];
 

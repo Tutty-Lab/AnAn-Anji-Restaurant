@@ -1,11 +1,11 @@
 // ============================================================================
 // Năm được phép xếp và in lịch – checklist nghiệm thu mục G:
-// "CHỈ ĐƯỢC IN LỊCH cho các năm 2026–2030 (ngoài khoảng này phải chặn)".
+// AnAn & Anji: 2023–2027 (chủ quán yêu cầu – gồm cả 2023/2024 của bảng lương).
 // Dùng chung cho popup Tạo lịch, ô Năm trong Cài đặt, hàm generate và nút Xuất PDF.
 // ============================================================================
 
-export const FIRST_SCHEDULE_YEAR = 2026;
-export const LAST_SCHEDULE_YEAR = 2030;
+export const FIRST_SCHEDULE_YEAR = 2023;
+export const LAST_SCHEDULE_YEAR = 2027;
 
 export const SCHEDULE_YEARS: readonly number[] = Array.from(
   { length: LAST_SCHEDULE_YEAR - FIRST_SCHEDULE_YEAR + 1 },
