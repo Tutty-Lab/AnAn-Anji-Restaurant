@@ -153,7 +153,9 @@ export function Dashboard({
     <div>
       <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-slate-500">Giờ đã xếp</span>
+          <span className="text-sm text-slate-500">
+            Giờ đã xếp · <b className="font-semibold text-slate-700">{String(view.schedule.month).padStart(2, "0")}/{view.schedule.year}</b>
+          </span>
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusPill}`}>{statusText}</span>
         </div>
         <div className="mt-1 flex items-baseline gap-1.5">

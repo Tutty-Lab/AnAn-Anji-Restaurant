@@ -9,8 +9,6 @@ import { DocsTab } from "./components/DocsTab";
 import { Dashboard } from "./components/Dashboard";
 import { LockScreen } from "./components/LockScreen";
 import { isAuthenticated, logout } from "./lib/auth";
-import { MONTH_NAMES_VI } from "./lib/dateFormat";
-import { isScheduleYearAllowed, SCHEDULE_YEARS } from "./lib/years";
 import { ANAN_PROFILE, ANJI_PROFILE, STORE_PROFILES } from "./lib/stores";
 import { crossStoreConflicts, crossStoreRunIssues, planAcrossStores } from "./lib/sharedPerson";
 
@@ -105,11 +103,6 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
    */
   const generateAll = (target: { year: number; month: number }) => {
     planAcrossStores(stores.map((s) => ({ employees: s.schedule.employees, plan: (blocked, caps) => s.generate(target, blocked, caps) })));
-  };
-
-  /** Monat/Jahr für BEIDE Läden setzen. */
-  const setPeriod = (patch: { year?: number; month?: number }) => {
-    for (const s of stores) s.updateMeta(patch);
   };
 
   /** Dieselbe Person an einem Tag in beiden Läden (z. B. nach einer Hand-Änderung). */
@@ -278,10 +271,9 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
       </div>
 
       <nav className="no-print mx-auto max-w-[1500px] px-3 sm:px-4 mt-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Eine Zeile wie demo-studenzettell: Chấm công · Lịch · Nhân viên als Segment, rechts Tháng + Tạo lịch. */}
-          {/* Handy: Tabs volle Breite (3 gleiche Spalten), darunter Tháng + Tạo lịch in einer Zeile. */}
-          <div className="grid w-full grid-cols-3 rounded-xl border border-slate-200 bg-white p-0.5 sm:inline-flex sm:w-auto">
+        <div className="flex items-center gap-2">
+          {/* Eine Zeile wie demo-studenzettell: Chấm công · Lịch · Nhân viên als Segment, rechts Tạo lịch. */}
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5">
             {TABS.filter((t) => MAIN_TABS.includes(t.id)).map((t) => {
               const active = !docsOpen && tab === t.id;
               return (
@@ -298,28 +290,8 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
               );
             })}
           </div>
-          <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
-          {/* Tháng/năm dùng chung cho cả hai quán – bản in phải cùng kỳ. */}
-          <select
-            aria-label="Tháng"
-            value={`${primary.schedule.year}-${primary.schedule.month}`}
-            onChange={(e) => {
-              const [year, month] = e.target.value.split("-").map(Number);
-              setPeriod({ year, month });
-            }}
-            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-medium text-slate-800 sm:flex-none sm:py-1.5"
-          >
-            {(isScheduleYearAllowed(primary.schedule.year)
-              ? SCHEDULE_YEARS
-              : [primary.schedule.year, ...SCHEDULE_YEARS]
-            ).flatMap((y) =>
-              MONTH_NAMES_VI.map((_, i) => (
-                <option key={`${y}-${i + 1}`} value={`${y}-${i + 1}`} className="bg-white text-slate-900">
-                  {String(i + 1).padStart(2, "0")}/{y}
-                </option>
-              )),
-            )}
-          </select>
+          {/* Tháng chọn trong popup „Tạo lịch" (wie demo-studenzettell) – hier nur der Knopf. */}
+          <div className="ml-auto">
             {/* „Tạo lịch" – wichtigste Aktion, rechts in der Tab-Zeile. */}
             <button
               type="button"

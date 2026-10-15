@@ -47,9 +47,8 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
   const { schedule, validation, generate, isLocked, openDates } = store;
   const [selected, setSelected] = useState<{ employeeId: string; date: string } | null>(null);
   // Mặc định: điện thoại -> xem theo ngày, màn lớn -> bảng tháng.
-  const [view, setView] = useState<"grid" | "day" | "coverage">(() =>
-    typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches ? "day" : "grid",
-  );
+  // Mặc định luôn là bảng tháng (để debug).
+  const [view, setView] = useState<"grid" | "day" | "coverage">("grid");
   const [weekIndex, setWeekIndex] = useState(0);
 
   const dates = useMemo(
@@ -222,9 +221,40 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
         </div>
       )}
 
-      {/* Eine Leiste wie demo-studenzettell: rechts „Xem theo" (Tháng / Ngày / Độ phủ). */}
+      {schedule.shifts.length > 0 && <StaffingReport analysis={store.analysis} />}
+
+      {/* Lỗi kiểm tra */}
+      {!validation.valid && schedule.shifts.length > 0 && (
+        <div className="mb-3 rounded bg-rose-50 border border-rose-200 text-rose-700 text-sm px-3 py-2">
+          <div className="font-medium mb-1">Lỗi kiểm tra ({validation.errors.length}):</div>
+          <ul className="list-disc pl-5 space-y-0.5 max-h-40 overflow-auto">
+            {validation.errors.slice(0, 30).map((e, i) => (
+              <li key={i}>{e.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Eine Zeile: Chú thích (bảng tháng) links, rechts „Xem theo" (Tháng / Ngày / Độ phủ). */}
       {hasEmployees && (
-        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-600">
+          {view === "grid" && (
+            <>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded border shift-early" /> Ca sáng
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded border shift-late" /> Ca tối
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded border shift-free" /> Nghỉ
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded border shift-custom bg-white" /> Đã sửa tay
+            </span>
+            </>
+          )}
+          <div className="ml-auto flex items-center gap-2">
           {view === "coverage" && weeks.length > 0 && (
             <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white">
               <button
@@ -269,38 +299,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
             <option value="day">Ngày</option>
             <option value="coverage">Độ phủ</option>
           </select>
-        </div>
-      )}
-
-      {schedule.shifts.length > 0 && <StaffingReport analysis={store.analysis} />}
-
-      {/* Lỗi kiểm tra */}
-      {!validation.valid && schedule.shifts.length > 0 && (
-        <div className="mb-3 rounded bg-rose-50 border border-rose-200 text-rose-700 text-sm px-3 py-2">
-          <div className="font-medium mb-1">Lỗi kiểm tra ({validation.errors.length}):</div>
-          <ul className="list-disc pl-5 space-y-0.5 max-h-40 overflow-auto">
-            {validation.errors.slice(0, 30).map((e, i) => (
-              <li key={i}>{e.message}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Chú thích bảng tháng */}
-      {view === "grid" && (
-        <div className="flex flex-wrap gap-3 mb-2 text-xs text-slate-600">
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded border shift-early" /> Ca sáng
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded border shift-late" /> Ca tối
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded border shift-free" /> Nghỉ
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded border shift-custom bg-white" /> Đã sửa tay
-          </span>
+          </div>
         </div>
       )}
 
