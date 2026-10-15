@@ -430,19 +430,24 @@ function chooseWeek(
   target: number,
   existing: Shift[],
   ctx: Ctx,
+  /** Arbeitstage dieser Woche laut Anw.-Tage (dayTargetsByWeek), sonst frei. */
+  dayTarget?: number,
 ): Choice[] {
   const { days, holidays, dailyTargets } = ctx;
   const eligible = dates.filter((date) => mayWorkOn(employee, date));
   // Tage im anderen Laden zählen für „höchstens 6 Tage je Woche" mit.
   const week = dates.length > 0 ? weekStartOf(dates[0]) : "";
   const elsewhere = (employee.blockedDates ?? []).filter((date) => weekStartOf(date) === week).length;
-  const limit = Math.min(dayLimit(employee) - elsewhere, eligible.length);
+  const limit = Math.min(dayLimit(employee) - elsewhere, eligible.length, dayTarget ?? Infinity);
   if (target <= 0 || limit <= 0) return [];
   const fixed = employee.fixedShift ? fixedPaid(employee.fixedShift) : 0;
   if (employee.fixedShift && fixed === 0) return [];
   const preferredCount = fixed
     ? Math.min(limit, Math.floor(target / fixed))
-    : Math.min(limit, Math.max(1, Math.floor(target / MIN_SHIFT)));
+    : dayTarget != null
+      // Anw.-Tage: genau so viele Tage, solange jeder Tag 3–9 h trägt.
+      ? Math.min(limit, Math.max(1, Math.ceil(target / MAX_PAID), Math.min(dayTarget, Math.floor(target / MIN_SHIFT))))
+      : Math.min(limit, Math.max(1, Math.floor(target / MIN_SHIFT)));
 
   // Jeder Tag darf 3–9 h tragen (bis zum Wochenrest); die Wunschlänge ist nur
   // weich (lengthCost). Eine Untergrenze aus dem Wochendurchschnitt zwang
@@ -810,7 +815,12 @@ function rebalanceWithinWeeks(result: Shift[], employees: Employee[], ctx: Ctx):
         const shorter: Variant[] = own.flatMap((shift) => resized(shift, -amount).map((next) => ({ old: shift, next, delta: change(shift, next) })));
         // Ein Teildienst darf ganz wegfallen, wenn genau seine Zeit woandershin wandert
         // (sonst sperrt die 3-h-Untergrenze z. B. den Mittagsteil eines geteilten Dienstes).
-        if (k > 1) for (const shift of own) if (shift.paidMinutes === amount) shorter.push({ old: shift, next: null, delta: change(shift, null) });
+        // Mit Anw.-Tage (daysPerMonth) nur, wenn der Tag dabei nicht ganz wegfällt.
+        if (k > 1) for (const shift of own) {
+          if (shift.paidMinutes !== amount) continue;
+          if (employee.daysPerMonth != null && !own.some((other) => other !== shift && other.date === shift.date)) continue;
+          shorter.push({ old: shift, next: null, delta: change(shift, null) });
+        }
         const longer: Variant[] = own.flatMap((shift) => resized(shift, amount).map((next) => ({ old: shift, next, delta: change(shift, next) })));
         for (const a of shorter) for (const b of longer) {
           if (a.old.date === b.old.date) continue;
@@ -939,6 +949,34 @@ export function generateWeeklySchedule(rawInput: WeeklyInput, existing: Shift[] 
     const weekMinutes = [...budgets].reduce((sum, [employeeId, weekly]) => sum + (isInHouse(employeeId) ? weekly.get(weekStart) ?? 0 : 0), 0);
     spreadByWeight(weekDates, weekMinutes / 60);
   }
+  // Anw.-Tage (daysPerMonth): gerundete Tageszahl des Monats auf die Wochen
+  // verteilt – anteilig zum Wochenbudget, größter Rest zuerst, je Woche höchstens
+  // so viele Tage, wie die Person dort arbeiten darf.
+  const dayTargets = new Map<string, Map<string, number>>();
+  for (const employee of employees) {
+    if (employee.daysPerMonth == null || employee.fixedShift) continue;
+    const weekly = budgets.get(employee.id)!;
+    const total = [...weekly.values()].reduce((sum, minutes) => sum + minutes, 0);
+    if (total <= 0) continue;
+    const capOf = (weekStart: string) => Math.min(
+      dayLimit(employee),
+      (byWeek.get(weekStart) ?? []).filter((date) => mayWorkOn(employee, date)).length,
+      Math.floor((weekly.get(weekStart) ?? 0) / MIN_SHIFT) || ((weekly.get(weekStart) ?? 0) > 0 ? 1 : 0),
+    );
+    let days = Math.round(employee.daysPerMonth);
+    const shares = [...weekly].map(([weekStart, minutes]) => {
+      const exact = days * minutes / total;
+      return { weekStart, exact, days: Math.min(Math.floor(exact), capOf(weekStart)) };
+    });
+    days -= shares.reduce((sum, share) => sum + share.days, 0);
+    for (const share of [...shares].sort((a, b) => (b.exact - Math.floor(b.exact)) - (a.exact - Math.floor(a.exact)))) {
+      if (days <= 0) break;
+      if (share.days < capOf(share.weekStart)) { share.days++; days--; }
+    }
+    // Rest (Wochen voll): dort, wo noch Platz ist.
+    for (const share of shares) while (days > 0 && share.days < capOf(share.weekStart)) { share.days++; days--; }
+    dayTargets.set(employee.id, new Map(shares.map((share) => [share.weekStart, share.days])));
+  }
   const paidMinutesOf = (list: Shift[]) => list.reduce((sum, shift) => sum + shift.paidMinutes, 0);
   for (const employee of employees) {
     const weekly = budgets.get(employee.id)!;
@@ -946,7 +984,7 @@ export function generateWeeklySchedule(rawInput: WeeklyInput, existing: Shift[] 
       ctx.patterns.delete(employee.id);
       const planned: Shift[] = [];
       for (const [weekStart, weekDates] of order) {
-        const choices = chooseWeek(employee, weekDates, weekly.get(weekStart) ?? 0, [...result, ...planned], ctx);
+        const choices = chooseWeek(employee, weekDates, weekly.get(weekStart) ?? 0, [...result, ...planned], ctx, dayTargets.get(employee.id)?.get(weekStart));
         const shifts = choices.flatMap((choice) => choice.option.shifts);
         planned.push(...shifts);
         // Das feste Muster entsteht in der ersten vollen Woche ohne Feiertag.
@@ -983,7 +1021,7 @@ export function generateWeeklySchedule(rawInput: WeeklyInput, existing: Shift[] 
       const paid = own.reduce((sum, s) => sum + s.paidMinutes, 0);
       if (!paid || employee.fixedShift) continue;
       const others = result.filter((s) => !own.includes(s));
-      const choices = chooseWeek(employee, weekDates, paid, others, ctx);
+      const choices = chooseWeek(employee, weekDates, paid, others, ctx, dayTargets.get(employee.id)?.get(weekStart));
       const next = choices.flatMap((choice) => choice.option.shifts);
       if (next.reduce((sum, s) => sum + s.paidMinutes, 0) !== paid) continue;
       const score = (shifts: Shift[]) => weekDates.reduce((sum, date) => {

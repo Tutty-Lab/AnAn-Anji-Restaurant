@@ -1,5 +1,6 @@
 // Bảng lương AnAn (Anw.-Std. = giờ hợp đồng tháng), theo dữ liệu chủ quán gửi.
 // Dùng cho đội mẫu (sampleData.ts), test và scripts/export-anan.mts.
+import { payrollDays } from "./payrollDays";
 import type { Employee, WorkRole } from "../types";
 
 export type PayrollEntry = { name: string; hours: number; startDate?: string; endDate?: string };
@@ -129,6 +130,13 @@ export function ananEmploymentType(entry: PayrollEntry): Employee["employmentTyp
 export const ananEmployeeId = (name: string) => `an-${name.toLowerCase().replace(/[^a-z]+/g, "-")}`;
 
 /** Đội của một tháng theo bảng lương ("yyyy-MM"); [] nếu tháng đó không có dữ liệu. */
+/**
+ * Anw.-Tage der Lohnabrechnung = 21,67 = 5 Tage × 52 Wochen ÷ 12 Monate: das
+ * Lohnbüro rechnet mit einer 5-Tage-Woche. Die Pläne aus der Lohnabrechnung
+ * halten deshalb höchstens 5 Arbeitstage je Woche ein (sonst 26 statt ~22 Tage).
+ */
+export const PAYROLL_DAYS_PER_WEEK = 5;
+
 export function ananRoster(monthKey: string): Employee[] {
   return (ANAN_PAYROLL[monthKey] ?? []).map((entry) => ({
     id: ananEmployeeId(entry.name),
@@ -136,6 +144,8 @@ export function ananRoster(monthKey: string): Employee[] {
     employmentType: ananEmploymentType(entry),
     targetMinutes: Math.round(entry.hours * 60),
     workRole: ANAN_ROLES[entry.name],
+    maxDaysPerWeek: PAYROLL_DAYS_PER_WEEK,
+    daysPerMonth: payrollDays("anan", monthKey, entry.name),
     ...(entry.startDate ? { startDate: entry.startDate } : {}),
     ...(entry.endDate ? { endDate: entry.endDate } : {}),
   }));

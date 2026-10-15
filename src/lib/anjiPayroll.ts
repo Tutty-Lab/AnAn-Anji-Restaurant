@@ -1,6 +1,8 @@
 // Bảng lương Anji (Anw.-Std. = giờ hợp đồng tháng), theo dữ liệu chủ quán gửi.
 // Dùng cho đội mẫu (sampleData.ts), test và scripts/export-anji.mts.
 import type { Employee } from "../types";
+import { PAYROLL_DAYS_PER_WEEK } from "./ananPayroll";
+import { payrollDays } from "./payrollDays";
 
 export type PayrollEntry = { name: string; hours: number; startDate?: string; endDate?: string };
 
@@ -153,6 +155,8 @@ export function anjiRoster(monthKey: string): Employee[] {
     employmentType: anjiEmploymentType(entry),
     targetMinutes: Math.round(entry.hours * 60),
     workRole: ANJI_KITCHEN.has(entry.name) ? "KITCHEN" : "SERVICE",
+    maxDaysPerWeek: PAYROLL_DAYS_PER_WEEK,
+    daysPerMonth: payrollDays("anji", monthKey, entry.name),
     ...(entry.startDate ? { startDate: entry.startDate } : {}),
     ...(entry.endDate ? { endDate: entry.endDate } : {}),
   }));

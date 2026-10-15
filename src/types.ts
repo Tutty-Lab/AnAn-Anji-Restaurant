@@ -111,6 +111,12 @@ export type Employee = {
   spreadEvenly?: boolean;
   /** „Khung giờ ưu tiên" (weich): Wunschzeiten je Wochentag. */
   preferredWindows?: PreferredWindow[];
+  /**
+   * Arbeitstage im Monat laut Lohnabrechnung (Anw.-Tage, z. B. 21,67). Gesetzt =
+   * der Planer verteilt das Monatssoll auf gerundet so viele Tage (je Woche
+   * anteilig). Nur für die Pläne aus der Lohnabrechnung.
+   */
+  daysPerMonth?: number;
   /** Häkchen „Đã kiểm tra thông tin (Lưu)" – nur ein Merker, ohne Einfluss auf die Planung. */
   saved?: boolean;
 };
