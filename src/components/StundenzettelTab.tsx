@@ -238,15 +238,16 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* Handy: alles in EINER Zeile (zwei Felder teilen sich die Breite, Knopf rechts). */}
+          <div className="flex items-center gap-2 sm:justify-end">
             {/* WER */}
             <select
               aria-label="Cho ai"
-              className="max-w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 sm:flex-none"
               value={who}
               onChange={(e) => setWho(e.target.value)}
             >
-              <option value="all">Cả quán ({schedule.employees.length} người)</option>
+              <option value="all">Cả quán ({schedule.employees.length})</option>
               {schedule.employees.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.name}
@@ -256,7 +257,7 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
             {/* WAS: cả tháng hoặc một tuần */}
             <select
               aria-label="Kỳ"
-              className="max-w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 sm:flex-none"
               value={what}
               onChange={(e) => setWhat(e.target.value)}
             >
@@ -270,7 +271,7 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
             <button
               disabled={pdfBusy || !hasSchedule || !isScheduleYearAllowed(schedule.year)}
               onClick={onPdf}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 active:bg-slate-800 disabled:opacity-40"
+              className="shrink-0 whitespace-nowrap rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 active:bg-slate-800 disabled:opacity-40"
             >
               {pdfBusy ? `Đang tạo PDF ${pdfProgress ? `(${pdfProgress})` : "…"}` : "Xuất PDF"}
             </button>

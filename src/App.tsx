@@ -280,7 +280,8 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
       <nav className="no-print mx-auto max-w-[1500px] px-3 sm:px-4 mt-4">
         <div className="flex flex-wrap items-center gap-2">
           {/* Eine Zeile wie demo-studenzettell: Chấm công · Lịch · Nhân viên als Segment, rechts Tháng + Tạo lịch. */}
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5">
+          {/* Handy: Tabs volle Breite (3 gleiche Spalten), darunter Tháng + Tạo lịch in einer Zeile. */}
+          <div className="grid w-full grid-cols-3 rounded-xl border border-slate-200 bg-white p-0.5 sm:inline-flex sm:w-auto">
             {TABS.filter((t) => MAIN_TABS.includes(t.id)).map((t) => {
               const active = !docsOpen && tab === t.id;
               return (
@@ -288,7 +289,7 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
                   key={t.id}
                   onClick={() => openTab(t.id)}
                   aria-current={active ? "page" : undefined}
-                  className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
+                  className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-center text-sm font-medium ${
                     active ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
@@ -297,7 +298,7 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
               );
             })}
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           {/* Tháng/năm dùng chung cho cả hai quán – bản in phải cùng kỳ. */}
           <select
             aria-label="Tháng"
@@ -306,7 +307,7 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
               const [year, month] = e.target.value.split("-").map(Number);
               setPeriod({ year, month });
             }}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-800"
+            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-medium text-slate-800 sm:flex-none sm:py-1.5"
           >
             {(isScheduleYearAllowed(primary.schedule.year)
               ? SCHEDULE_YEARS
