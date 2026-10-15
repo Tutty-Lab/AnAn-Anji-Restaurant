@@ -147,7 +147,7 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
         <div className="mx-auto max-w-[1500px] px-3 sm:px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="truncate text-base sm:text-lg font-semibold" title={`bản ${__BUILD__}`}>
-              AnAn &amp; Anji · Lịch làm việc &amp; Bảng chấm công
+              AnAn &amp; Anji
             </h1>
             {/* Nur ein SYNC-FEHLER wird gezeigt: dann liegen Daten nur auf diesem Gerät. */}
             {stores.some((s) => s.remoteStatus === "error") && (

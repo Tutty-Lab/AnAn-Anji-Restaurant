@@ -21,7 +21,7 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
-        name: "AnAn & Anji · Lịch làm việc & Bảng chấm công",
+        name: "AnAn & Anji",
         short_name: "AnAn & Anji",
         description:
           "Tạo lịch làm việc hàng tháng và in bảng chấm công (Stundenzettel) cho Restaurant AnAn và Restaurant Anji.",
