@@ -381,7 +381,8 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
         </div>
       )}
 
-      <main className="mx-auto max-w-[1500px] px-3 sm:px-4 py-4">
+      {/* Tab Lịch: volle Breite – mehr Platz für Tage und Debug-Zeilen. */}
+      <main className={`mx-auto px-3 sm:px-4 py-4 ${tab === "dienstplan" && !docsOpen ? "max-w-none" : "max-w-[1500px]"}`}>
         {docsOpen ? (
           <div className="no-print">
             <button

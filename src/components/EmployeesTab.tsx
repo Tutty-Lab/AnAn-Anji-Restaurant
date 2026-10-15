@@ -254,9 +254,9 @@ export function EmployeesTab({ store, allStores }: { store: UseScheduleReturn; a
   );
 
   return (
-    <section className="rounded-lg bg-white border border-slate-200 p-4 sm:p-5 shadow-sm">
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="text-base font-semibold text-slate-900">
+    <section className="rounded-lg bg-white border border-slate-200 p-3 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-semibold text-slate-900">
           Nhân viên {profile.shortName}
           {schedule.employees.length > 0 && (
             <span className="ml-2 text-sm font-normal text-slate-400">
@@ -267,14 +267,11 @@ export function EmployeesTab({ store, allStores }: { store: UseScheduleReturn; a
         <button
           onClick={() => setOffen("new")}
           disabled={locked}
-          className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 active:bg-slate-800 disabled:opacity-40"
+          className="rounded-lg bg-slate-900 px-2.5 py-1 text-sm font-medium text-white hover:bg-slate-700 active:bg-slate-800 disabled:opacity-40"
         >
           + Thêm
         </button>
       </div>
-      <p className="text-xs text-slate-500 mb-4">
-        Hợp đồng theo <b>tháng</b> hoặc theo <b>tuần</b> (Azubi). Lịch xếp theo bậc 30′, không vượt hợp đồng. Bấm vào một người để sửa.
-      </p>
 
       {locked && (
         <div className="mb-3 rounded bg-amber-50 border border-amber-200 text-amber-900 text-sm px-3 py-2">
@@ -287,19 +284,36 @@ export function EmployeesTab({ store, allStores }: { store: UseScheduleReturn; a
           Chưa có nhân viên. Bấm <b>+ Thêm</b> để tạo.
         </div>
       ) : (
-        <ul className="space-y-2">
-          {schedule.employees.map((emp) => (
-            <li key={emp.id}>
-              <button
-                onClick={() => setOffen(emp.id)}
-                className="w-full text-left rounded-lg border border-slate-200 p-3 flex items-center gap-3 hover:bg-slate-50 active:bg-slate-100 transition-colors"
-              >
-                <EmployeeSummaryRow emp={emp} year={schedule.year} month={schedule.month} openDates={openDates} workHours={schedule.workHours} profile={profile} sharedWith={partnerLabel(emp)} />
-                <span className="text-slate-300 text-lg leading-none">›</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        // Gọn: một dòng mỗi người, bấm vào dòng để sửa.
+        <div className="-mx-3 overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="border-y border-slate-200 bg-slate-50 text-left text-[11px] font-medium text-slate-500">
+                <th className="px-3 py-1.5">Tên</th>
+                <th className="px-2 py-1.5">Nhóm</th>
+                <th className="px-2 py-1.5">Loại</th>
+                <th className="px-2 py-1.5 text-right">Giờ HĐ</th>
+                <th className="px-2 py-1.5 text-right">Tháng này</th>
+                <th className="px-2 py-1.5">Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedule.employees.map((emp) => (
+                <EmployeeTableRow
+                  key={emp.id}
+                  emp={emp}
+                  year={schedule.year}
+                  month={schedule.month}
+                  openDates={openDates}
+                  workHours={schedule.workHours}
+                  profile={profile}
+                  sharedWith={partnerLabel(emp)}
+                  onOpen={() => setOffen(emp.id)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {!locked && (
@@ -349,8 +363,8 @@ export function EmployeesTab({ store, allStores }: { store: UseScheduleReturn; a
 }
 
 
-/** Kompakte Zeile in der Liste: Name, Art, Bereich, Vertrag, Besonderheiten. */
-function EmployeeSummaryRow({
+/** Eine Tabellenzeile je Person: Name, Nhóm, Art, Vertrag, Monat, Besonderheiten. */
+function EmployeeTableRow({
   emp,
   year,
   month,
@@ -358,6 +372,7 @@ function EmployeeSummaryRow({
   workHours,
   profile,
   sharedWith,
+  onOpen,
 }: {
   emp: Employee;
   year: number;
@@ -366,10 +381,10 @@ function EmployeeSummaryRow({
   workHours: WorkHoursConfig;
   profile: StoreProfile;
   sharedWith: string[];
+  onOpen: () => void;
 }) {
   const monatMin = monthlyTargetMinutesFor(emp, openDates, workHours);
-  const monatH = monatMin / 60;
-  const info = splitInfo(monatH, emp.employmentType);
+  const info = splitInfo(monatMin / 60, emp.employmentType);
   const first = openDates[0];
   const last = openDates[openDates.length - 1];
   const schoolThisMonth = first && last
@@ -380,69 +395,46 @@ function EmployeeSummaryRow({
     : WEEKDAY_ORDER.filter((key) => !emp.availableWeekdays!.includes(key));
   const tooMany = emp.weeklyHours == null && emp.targetMinutes / 60 > WARN_HOURS;
   const windows = preferredWindowsOf(emp);
+  const notes = [
+    sharedWith.length > 0 && `cũng làm ở ${sharedWith.join(", ")}`,
+    daysOff.length > 0 && `nghỉ ${daysOff.map((key) => WEEKDAY_SHORT_VI[key]).join(" ")}`,
+    emp.maxDaysPerWeek && `${emp.maxDaysPerWeek} ngày/tuần`,
+    emp.shiftHours && `ca ${formatHours(emp.shiftHours.min)}–${formatHours(emp.shiftHours.max)}h`,
+    emp.spreadEvenly && "rải đều",
+    windows.length > 0 && `ưu tiên ${windows.map(describePreferredWindow).join(" + ")}`,
+    emp.fixedShift && `ca cố định ${minutesToTime(emp.fixedShift.startMinutes)}–${minutesToTime(emp.fixedShift.endMinutes)}`,
+    ...schoolThisMonth.map((period) => `học ${shortDate(period.start)}–${shortDate(period.end)}`),
+    emp.startDate && `vào ${shortDate(emp.startDate)}${emp.startDate.slice(0, 4)}`,
+    emp.endDate && `nghỉ việc ${shortDate(emp.endDate)}${emp.endDate.slice(0, 4)}`,
+  ].filter(Boolean) as string[];
+  const switched = isRoleSwitchedInMonth(emp, year, month);
 
   return (
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2">
-        {emp.saved && <span className="shrink-0 text-emerald-600 text-sm" title="Đã kiểm tra thông tin">✓</span>}
-        <span className="font-medium text-slate-900 truncate">{emp.name}</span>
-        <span className="shrink-0 rounded bg-slate-100 text-slate-600 text-[11px] px-1.5 py-0.5">
-          {employmentShortVi(emp.employmentType)}
-        </span>
-        <span className={`shrink-0 rounded text-[11px] px-1.5 py-0.5 ${ROLE_BADGE[emp.workRole ?? "NONE"]}`}>
+    <tr onClick={onOpen} className="cursor-pointer border-b border-slate-100 hover:bg-slate-50" title="Bấm để sửa">
+      <td className="whitespace-nowrap px-3 py-1.5 font-medium text-slate-900">
+        {emp.saved && <span className="mr-1 text-emerald-600" title="Đã kiểm tra thông tin">✓</span>}
+        {emp.name}
+        {tooMany && <span className="ml-1 text-amber-600">⚠</span>}
+      </td>
+      <td className="whitespace-nowrap px-2 py-1.5">
+        <span className={`rounded px-1.5 py-0.5 text-[11px] ${ROLE_BADGE[emp.workRole ?? "NONE"]}`}>
           {roleLabelVi(emp.workRole, profile)}
         </span>
-        {isRoleSwitchedInMonth(emp, year, month) && (
-          <span className="shrink-0 rounded bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">
-            → {roleLabelVi(monthRole(emp, year, month), profile)} tháng này
+        {switched && (
+          <span className="ml-1 rounded bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">
+            → {roleLabelVi(monthRole(emp, year, month), profile)}
           </span>
         )}
-        {sharedWith.length > 0 && (
-          <span className="shrink-0 rounded bg-fuchsia-50 text-fuchsia-700 text-[11px] px-1.5 py-0.5">
-            cũng làm ở {sharedWith.join(", ")}
-          </span>
-        )}
-        {tooMany && <span className="shrink-0 text-amber-600 text-xs">⚠</span>}
-      </div>
-      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-        <span>
-          {emp.weeklyHours != null
-            ? `${formatHours(emp.weeklyHours)}h/tuần · ${minutesToShortHours(monatMin)} tháng này · `
-            : `${formatHours(emp.targetMinutes / 60)}h · `}
-          <span className={info.ok ? "" : "text-rose-600"}>{info.text}</span>
-        </span>
-        {daysOff.length > 0 && (
-          <span className="text-slate-400">· nghỉ {daysOff.map((key) => WEEKDAY_SHORT_VI[key]).join(" ")}</span>
-        )}
-        {emp.maxDaysPerWeek ? <span className="text-slate-400">· {emp.maxDaysPerWeek} ngày/tuần</span> : null}
-        {emp.shiftHours && (
-          <span className="text-teal-700">
-            · ca {formatHours(emp.shiftHours.min)}–{formatHours(emp.shiftHours.max)}h
-          </span>
-        )}
-        {emp.spreadEvenly && <span className="text-teal-700">· rải đều</span>}
-        {windows.length > 0 && (
-          <span className="text-teal-700">· ưu tiên {windows.map(describePreferredWindow).join(" + ")}</span>
-        )}
-        {emp.fixedShift ? (
-          <span className="text-indigo-700">
-            · ca cố định {minutesToTime(emp.fixedShift.startMinutes)}–{minutesToTime(emp.fixedShift.endMinutes)}
-          </span>
-        ) : null}
-        {schoolThisMonth.map((period) => (
-          <span key={period.start} className="rounded bg-amber-50 text-amber-800 px-1.5 py-0.5">
-            học {shortDate(period.start)}–{shortDate(period.end)}
-          </span>
-        ))}
-        {(emp.startDate || emp.endDate) && (
-          <span className="text-violet-700">
-            · {emp.startDate ? `vào ${shortDate(emp.startDate)}${emp.startDate.slice(0, 4)}` : ""}
-            {emp.startDate && emp.endDate ? " – " : ""}
-            {emp.endDate ? `nghỉ ${shortDate(emp.endDate)}${emp.endDate.slice(0, 4)}` : ""}
-          </span>
-        )}
-      </div>
-    </div>
+      </td>
+      <td className="whitespace-nowrap px-2 py-1.5 text-slate-600">{employmentShortVi(emp.employmentType)}</td>
+      <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-slate-700">
+        {emp.weeklyHours != null ? `${formatHours(emp.weeklyHours)}h/tuần` : `${formatHours(emp.targetMinutes / 60)}h`}
+      </td>
+      <td className={`whitespace-nowrap px-2 py-1.5 text-right tabular-nums ${info.ok ? "text-slate-500" : "text-rose-600"}`}>
+        {minutesToShortHours(monatMin)} · {info.text}
+      </td>
+      <td className="px-2 py-1.5 text-slate-500">{notes.join(" · ")}</td>
+    </tr>
   );
 }
 

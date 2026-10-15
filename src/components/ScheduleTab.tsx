@@ -415,7 +415,7 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
               })}
             </tbody>
             <tfoot>
-              <SummaryRow label="Số nhân viên" dates={gridDates} value={(d) => String(dayStats.get(d)!.people.size)} />
+              <SummaryRow label="Số NV" dates={gridDates} value={(d) => String(dayStats.get(d)!.people.size)} />
               <SummaryRow label="Số ca" dates={gridDates} value={(d) => String(dayStats.get(d)!.shifts)} />
               <SummaryRow label="Bếp" labelClass="text-orange-700" dates={gridDates} value={(d) => String(dayStats.get(d)!.kitchen.size)} />
               <SummaryRow label={store.profile.groupLabels.SERVICE} labelClass="text-sky-700" dates={gridDates} value={(d) => String(dayStats.get(d)!.service.size)} />
@@ -432,7 +432,8 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
               {COVERAGE_WINDOWS.map((w) => (
                 <CoverageRow
                   key={w.key}
-                  label={`${store.profile.groupLabels[w.group]} ${w.range}`}
+                  label={`${shortGroup(store.profile.groupLabels[w.group])} ${w.range}`}
+                  title={`${store.profile.groupLabels[w.group]} ít nhất có mặt, ${w.title}`}
                   labelClass={w.group === "KITCHEN" ? "text-orange-700" : "text-sky-700"}
                   dates={gridDates}
                   cell={(d) => coverage.get(d)?.get(w.key) ?? null}
@@ -471,7 +472,7 @@ function SummaryRow({
 }) {
   return (
     <tr className="bg-slate-50 text-slate-600">
-      <td className={`sticky left-0 z-10 bg-slate-50 border-t border-r border-slate-200 px-2 py-1 font-medium whitespace-nowrap ${labelClass}`}>
+      <td className={`sticky left-0 z-10 bg-slate-50 border-t border-r border-slate-200 px-1.5 py-1 font-medium whitespace-nowrap ${labelClass}`}>
         {label}
       </td>
       {dates.map((d) => (
@@ -489,35 +490,41 @@ type Coverage = { min: number; short: boolean; need: number };
 
 // Khung giờ cho các dòng „ít nhất" ở chân bảng (from undefined = đầu giờ làm).
 // Theo quy tắc AnAn/Anji: giờ đông 12–14h và 18–22h, đóng cửa 22–22:30.
-const COVERAGE_WINDOWS: { key: string; range: string; group: Exclude<StaffGroup, "DRIVER">; from?: number; to: number }[] = (
+// Nhãn ngắn để cột tên hẹp (nhiều chỗ cho các ngày); nhãn đầy đủ nằm ở tooltip.
+const COVERAGE_WINDOWS: { key: string; range: string; title: string; group: Exclude<StaffGroup, "DRIVER">; from?: number; to: number }[] = (
   [
-    ["open", "mở cửa–12h", undefined, 12 * 60],
-    ["noon", "12–14h", 12 * 60, 14 * 60],
-    ["afternoon", "14–17h", 14 * 60, 17 * 60],
-    ["evening-open", "17–18h", 17 * 60, 18 * 60],
-    ["evening", "18–22h", 18 * 60, 22 * 60],
-    ["closing", "đóng cửa 22–22:30", 22 * 60, 22 * 60 + 30],
+    ["open", "mở–12", "mở cửa – 12:00", undefined, 12 * 60],
+    ["noon", "12–14", "12:00 – 14:00 (giờ đông)", 12 * 60, 14 * 60],
+    ["afternoon", "14–17", "14:00 – 17:00", 14 * 60, 17 * 60],
+    ["evening-open", "17–18", "17:00 – 18:00", 17 * 60, 18 * 60],
+    ["evening", "18–22", "18:00 – 22:00 (giờ đông)", 18 * 60, 22 * 60],
+    ["closing", "22–22½", "đóng cửa 22:00 – 22:30", 22 * 60, 22 * 60 + 30],
   ] as const
-).flatMap(([key, range, from, to]) =>
-  (["KITCHEN", "SERVICE"] as const).map((group) => ({ key: `${group}-${key}`, range, group, from, to })),
+).flatMap(([key, range, title, from, to]) =>
+  (["KITCHEN", "SERVICE"] as const).map((group) => ({ key: `${group}-${key}`, range, title, group, from, to })),
 );
+
+/** Kurzname des Bereichs für die schmale erste Spalte („Phục vụ" → „PV"). */
+const shortGroup = (label: string) => (label.length > 4 ? label.split(" ").map((w) => w[0].toUpperCase()).join("") : label);
 
 /** Dòng „ít nhất x người" trong khung giờ: 0 = đỏ, 1 = vàng, thiếu so với quy tắc = viền đỏ. */
 function CoverageRow({
   label,
+  title,
   labelClass = "",
   dates,
   cell,
 }: {
   label: string;
+  title?: string;
   labelClass?: string;
   dates: string[];
   cell: (d: string) => Coverage | null;
 }) {
   return (
     <tr className="bg-slate-50 text-slate-600">
-      <td className={`sticky left-0 z-10 bg-slate-50 border-t border-r border-slate-200 px-2 py-1 font-medium whitespace-nowrap ${labelClass}`}>
-        {label} <span className="text-[11px] font-normal text-slate-400">ít nhất</span>
+      <td title={title} className={`sticky left-0 z-10 bg-slate-50 border-t border-r border-slate-200 px-1.5 py-1 font-medium whitespace-nowrap ${labelClass}`}>
+        {label}
       </td>
       {dates.map((d) => {
         const c = cell(d);
