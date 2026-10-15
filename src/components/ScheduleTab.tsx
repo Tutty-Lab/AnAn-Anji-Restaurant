@@ -488,20 +488,23 @@ function SummaryRow({
 type Coverage = { min: number; short: boolean; need: number };
 
 // Khung giờ cho các dòng „ít nhất" ở chân bảng (from undefined = đầu giờ làm).
-// Theo quy tắc AnAn/Anji: giờ đông 12–14h và 18–22h, đóng cửa 22–22:30.
+// Buổi tối chia 18–21 và 21–22:30 (chủ quán).
 // Nhãn ngắn để cột tên hẹp (nhiều chỗ cho các ngày); nhãn đầy đủ nằm ở tooltip.
-const COVERAGE_WINDOWS: { key: string; range: string; title: string; group: Exclude<StaffGroup, "DRIVER">; from?: number; to: number }[] = (
+const COVERAGE_RANGES = (
   [
     ["open", "mở–12", "mở cửa – 12:00", undefined, 12 * 60],
     ["noon", "12–14", "12:00 – 14:00 (giờ đông)", 12 * 60, 14 * 60],
     ["afternoon", "14–17", "14:00 – 17:00", 14 * 60, 17 * 60],
     ["evening-open", "17–18", "17:00 – 18:00", 17 * 60, 18 * 60],
-    ["evening", "18–22", "18:00 – 22:00 (giờ đông)", 18 * 60, 22 * 60],
-    ["closing", "22–22½", "đóng cửa 22:00 – 22:30", 22 * 60, 22 * 60 + 30],
+    ["evening", "18–21", "18:00 – 21:00 (giờ đông)", 18 * 60, 21 * 60],
+    ["evening-end", "21–22½", "21:00 – đóng cửa 22:30", 21 * 60, 22 * 60 + 30],
   ] as const
-).flatMap(([key, range, title, from, to]) =>
-  (["KITCHEN", "SERVICE"] as const).map((group) => ({ key: `${group}-${key}`, range, title, group, from, to })),
 );
+// Bếp và Bồi/Phục vụ riêng thành hai nhóm: hết các dòng Bếp rồi mới tới Bồi.
+const COVERAGE_WINDOWS: { key: string; range: string; title: string; group: Exclude<StaffGroup, "DRIVER">; from?: number; to: number }[] =
+  (["KITCHEN", "SERVICE"] as const).flatMap((group) =>
+    COVERAGE_RANGES.map(([key, range, title, from, to]) => ({ key: `${group}-${key}`, range, title, group, from, to })),
+  );
 
 /** Kurzname des Bereichs für die schmale erste Spalte („Phục vụ" → „PV"). */
 const shortGroup = (label: string) => (label.length > 4 ? label.split(" ").map((w) => w[0].toUpperCase()).join("") : label);

@@ -26,9 +26,13 @@ describe("Profile je Laden", () => {
     expect(ANJI_PROFILE.groupLabels.SERVICE).toBe("Bồi");
     expect(ANAN_PROFILE.workRoles).toContain("DRIVER");
     expect(ANJI_PROFILE.workRoles).not.toContain("DRIVER");
-    const eveningThuSun = (labelPart: string) =>
-      [ANAN_PROFILE, ANJI_PROFILE].map((p) => p.staffingRules.find((r) => r.label.includes(labelPart))!.minStaff);
-    expect(eveningThuSun("chiều T5–CN")).toEqual([3, 4]);
+    const evening = (profile: typeof ANAN_PROFILE, labelPart: string) =>
+      profile.staffingRules.find((r) => r.label.includes(labelPart))!;
+    // Cả hai quán đông nhất T6, T7, CN: AnAn tối T6–CN 3 phục vụ, Anji 4 bồi + 4 bếp.
+    expect(evening(ANAN_PROFILE, "chiều T6–CN").minStaff).toBe(3);
+    expect(evening(ANJI_PROFILE, "chiều T6–CN").minStaff).toBe(4);
+    expect(evening(ANJI_PROFILE, "Bếp tối T6–CN").weekdays).toEqual(["friday", "saturday", "sunday"]);
+    expect(ANJI_PROFILE.dayWeights.thursday).toBeLessThan(ANJI_PROFILE.dayWeights.sunday);
     expect(ANAN_PROFILE.staffingRules.filter((r) => r.hard)).toHaveLength(2);
     expect(ANJI_PROFILE.staffingRules.filter((r) => r.hard)).toHaveLength(2);
   });

@@ -28,10 +28,10 @@ describe("Eintritt mitten im Monat (startDate)", () => {
     const openDates = openDatesOf(2026, 9);
     const full = wk("full", 39);
     const late = wk("late", 39, { startDate: "2026-09-07" });
-    // Faktor = Gewicht × Arbeitsminuten: Mo–Mi 1,0 × 570, Do 1,3 × 570, Fr 1,5 × 570,
-    // Sa 1,5 × 720, So 1,3 × 660 – volle Woche 5.244. September 2026:
-    // Di–So der ersten Woche (4.674), drei volle Wochen, Mo–Mi der letzten (1.710).
-    const expected = 39 * 60 * (3 + (4674 + 1710) / 5244);
+    // Faktor = Gewicht × Arbeitsminuten: Mo–Do 1,0 × 570, Fr 1,5 × 570,
+    // Sa 1,5 × 720, So 1,5 × 660 – volle Woche 5.205. September 2026:
+    // Di–So der ersten Woche (4.635), drei volle Wochen, Mo–Mi der letzten (1.710).
+    const expected = 39 * 60 * (3 + (4635 + 1710) / 5205);
     expect(Math.abs(monthlyTargetMinutesFor(full, openDates) - expected)).toBeLessThanOrEqual(1);
     // Die erste (gesperrte) Woche fehlt komplett: rund 35 h weniger.
     const diff = (monthlyTargetMinutesFor(full, openDates) - monthlyTargetMinutesFor(late, openDates)) / 60;

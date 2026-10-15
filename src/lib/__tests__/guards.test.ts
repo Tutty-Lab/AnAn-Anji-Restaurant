@@ -18,7 +18,7 @@ const emp = (id: string, type: Employee["employmentType"], weeklyHours: number):
 
 describe("Zu wenige Leute am Abend", () => {
   // 2026-08-01 ist ein Samstag: Arbeitszeit 10:30–22:30, offen ab 11:00 durchgehend.
-  // Abends (17:00–Schluss) T5–CN mindestens 3 Phục vụ. Hier steht nur EINE Person.
+  // Abends (18:00–22:00) T6–CN mindestens 3 Phục vụ. Hier steht nur EINE Person.
   const employees = ["a"].map((id) => emp(id, "TEILZEIT", 30));
   const shifts: Shift[] = [
     {
@@ -51,7 +51,7 @@ describe("Zu wenige Leute am Abend", () => {
   it("nennt die tatsächliche Personenzahl und die geforderte", () => {
     const abend = analysis.peakViolations
       .find((d) => d.date === "2026-08-01")!
-      .peaks.find((p) => p.label === "Phục vụ chiều T5–CN" && !p.ok)!;
+      .peaks.find((p) => p.label === "Phục vụ chiều T6–CN" && !p.ok)!;
     expect(abend.minStaff).toBe(1); // so viele stehen wirklich da
     expect(abend.required).toBe(3);
   });
@@ -65,7 +65,7 @@ describe("Zu wenige Leute am Abend", () => {
       shifts: Array.from({ length: 3 }, (_, index) => ({ ...shifts[0], id: `s${index}`, employeeId: String(index) })),
     });
     const tag = vier.days.find((d) => d.date === "2026-08-01")!;
-    expect(tag.peaks.find((p) => p.label === "Phục vụ chiều T5–CN")!.ok).toBe(true);
+    expect(tag.peaks.find((p) => p.label === "Phục vụ chiều T6–CN")!.ok).toBe(true);
   });
 
   it("counts a concrete pause as absent", () => {
@@ -82,7 +82,7 @@ describe("Zu wenige Leute am Abend", () => {
       })),
     });
     const evening = paused.days.find((day) => day.date === "2026-08-01")!
-      .peaks.find((peak) => peak.label === "Phục vụ chiều T5–CN")!;
+      .peaks.find((peak) => peak.label === "Phục vụ chiều T6–CN")!;
     expect(evening.minStaff).toBe(2);
     expect(evening.ok).toBe(false);
   });
@@ -119,7 +119,7 @@ describe("Bereiche: Bếp, Phục vụ", () => {
   it("mittags 2 Phục vụ und 2 Bếp als weiche Vorgabe", () => {
     const employees = [staff("k1", "KITCHEN"), staff("s1", "SERVICE")];
     const peaks = peaksOf(employees, employees.map((e) => lunch(e.id)));
-    const service = peaks.find((peak) => peak.label === "Phục vụ sáng")!;
+    const service = peaks.find((peak) => peak.label === "Phục vụ trưa T2–T5")!;
     expect([service.startMinutes, service.endMinutes]).toEqual([12 * 60, 14 * 60]);
     expect(service.required).toBe(2);
     expect(service.minStaff).toBe(1);

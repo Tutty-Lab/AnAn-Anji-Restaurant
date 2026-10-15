@@ -63,17 +63,16 @@ die Küche vor.
 - **Hart (beide):** immer mindestens 1 Bếp (ab Vorbereitung) und 1 Phục vụ/Bồi
   (ab Öffnung). Der Scheduler gewichtet harte Regeln zehnfach
   (`hardRuleFactor`); sie werden auch gemeldet, wenn ein Bereich keine Person hat.
-- **Weich AnAn:** Phục vụ Mo–Mi mittags 2 / abends 2, Do–So 2 / 3. Bếp
-  Vorbereitung 1, mittags 2, abends 3 (Do–Sa). Lái xe Kernzeit 18:00–21:00
-  (So/Feiertag 18:00–22:00): Mo–Sa 1, So 2; Fahrer dürfen in allen
-  Öffnungszeiten arbeiten.
-- **Weich Anji:** Bồi Mo–Mi mittags 3 / abends 3, Do–So 3 / 4. Bếp
-  Vorbereitung 1, mittags 3, abends 4 (Do–Sa).
+- **Weich (beide, AnAn/Anji):** Service T2–T5: mittags 12–14 2–3 / 3 (Anji),
+  18–20 3–4, 20–21 2, 21–Schluss 1. Fr–So: mittags ≥ 2 / 3, abends 18–22 ≥ 3 / 4,
+  Schluss 2. Küche: Vorbereitung 1, mittags 2 / 3, Fr–So abends 18–21 3 / 4.
+  AnAn-Fahrer: Kernzeit 18:00–21:00 (So/Feiertag 18:00–22:00): Mo–Sa 1, So 2.
+- Reicht das Personal nicht, fallen weiche Lücken bevorzugt auf Mo–Mi
+  (Fr–So ×3, Mo–Mi ×0,5); harte Regeln wiegen ×100.
 - Weiche Zahlen gelten nur in den Stoßzeiten: mittags = 12:00–14:00, abends =
   18:00–22:00. Beim Öffnen (11–12, 17–18), 14:00–14:30 und Sa/So 14:30–17:00
   reicht 1 Bếp + 1 Phục vụ/Bồi. Schluss 22:00–22:30 (weich): 2 Phục vụ/Bồi, 1 Bếp.
-- **Tagesgewichte:** AnAn Mo–Mi 1,0, Do 1,3, Fr/Sa 1,5, So 1,3 · Anji Mo–Mi 1,0,
-  Do/Fr 1,5, Sa 1,3, So 1,0.
+- **Tagesgewichte (beide):** Mo–Do 1,0, Fr/Sa/So 1,5 (am stärksten Fr, Sa, So).
 
 ## Lohnabrechnung
 

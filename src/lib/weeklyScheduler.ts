@@ -143,7 +143,9 @@ export const SCHEDULER_TUNING = {
    * so viel mal mehr als weiche Vorgaben – eine Lücke in der Mindestbesetzung wird
    * nie gegen eine dritte Person mittags getauscht.
    */
-  hardRuleFactor: 10,
+  // 100 (vorher 10): weiche Regeln an Fr–So wiegen 3-fach (softDayFactor); eine
+  // halbe Stunde ohne Bếp/Phục vụ muss trotzdem teurer sein als jede weiche Lücke.
+  hardRuleFactor: 100,
   /**
    * Monatsvertrag: Kosten je halber Stunde, die eine Woche unter ihrem Budget
    * bleibt (wird später an anderen Tagen nachgeholt). Zwischen einer weichen
@@ -159,6 +161,13 @@ export const SCHEDULER_TUNING = {
    *  - unpreferredDayCost: ein Tag ganz ohne Wunschfenster,
    *  - spreadSlotCost: „Rải đều" + „Độ dài ca": jede halbe Stunde über der Untergrenze.
    */
+  /**
+   * Weiche Besetzungsregeln je Wochentag gewichtet (Vorgabe des Betriebs): reicht
+   * das Personal nicht, sollen die Lücken auf Mo–Mi fallen, nicht auf Fr–So.
+   */
+  softDayFactor: { monday: 0.5, tuesday: 0.5, wednesday: 0.5, thursday: 1, friday: 3, saturday: 3, sunday: 3 } as Record<WeekdayKey, number>,
+  /** Anw.-Tage: je Arbeitstag über der Wochenvorgabe – knapp unter einer harten Lücke. */
+  extraDayCost: 800000,
   ownShiftSlotCost: 20000,
   preferredSlotCost: 10000,
   unpreferredDayCost: 40000,
@@ -403,8 +412,9 @@ function dayCost(shifts: Shift[], blocks: DayBlocks, weekday: WeekdayKey, target
     // Fahrerfenster bleiben beim alten Gewicht: dort gab es nie Lücken, und das
     // höhere Gewicht zerlegte die Woche eines Fahrers in mehr, kürzere Abende.
     const driverOnly = window.mask === DRIVER_MASK;
-    const under = driverOnly ? DRIVER_WINDOW_COST : SCHEDULER_TUNING.underStaffCost * (window.hard ? SCHEDULER_TUNING.hardRuleFactor : 1);
-    const over = driverOnly ? DRIVER_WINDOW_COST : SCHEDULER_TUNING.overStaffCost;
+    const soft = SCHEDULER_TUNING.softDayFactor[weekday];
+    const under = driverOnly ? DRIVER_WINDOW_COST : SCHEDULER_TUNING.underStaffCost * (window.hard ? SCHEDULER_TUNING.hardRuleFactor : soft);
+    const over = driverOnly ? DRIVER_WINDOW_COST : SCHEDULER_TUNING.overStaffCost * soft;
     for (let k = 0; k < window.slots.length; k++) {
       const slot = window.slots[k];
       let staff = 0;
@@ -438,7 +448,9 @@ function chooseWeek(
   // Tage im anderen Laden zählen für „höchstens 6 Tage je Woche" mit.
   const week = dates.length > 0 ? weekStartOf(dates[0]) : "";
   const elsewhere = (employee.blockedDates ?? []).filter((date) => weekStartOf(date) === week).length;
-  const limit = Math.min(dayLimit(employee) - elsewhere, eligible.length, dayTarget ?? Infinity);
+  // Anw.-Tage (dayTarget) ist nur die gewünschte Tageszahl (preferredCount, weich):
+  // ein Tag mehr ist erlaubt, wenn sonst eine harte Regel (1 Bếp, 1 Phục vụ) reißt.
+  const limit = Math.min(dayLimit(employee) - elsewhere, eligible.length, dayTarget != null ? dayTarget + 1 : Infinity);
   if (target <= 0 || limit <= 0) return [];
   const fixed = employee.fixedShift ? fixedPaid(employee.fixedShift) : 0;
   if (employee.fixedShift && fixed === 0) return [];
@@ -539,6 +551,8 @@ function chooseWeek(
   for (const state of states.values()) {
     // Die Tageszahl hält, die Länge je Tag folgt dem Gewicht.
     const cost = state.cost + (state.choices.length - preferredCount) ** 2 * 50000 +
+      // Ein Tag über Anw.-Tage nur gegen eine harte Lücke (900.000 je halbe Stunde).
+      (dayTarget != null ? Math.max(0, state.choices.length - dayTarget) * SCHEDULER_TUNING.extraDayCost : 0) +
       (monthly ? (target - state.paid) / SLOT * SCHEDULER_TUNING.weekShortCost : 0);
     const better = monthly
       ? cost < bestCost
@@ -757,6 +771,94 @@ function moveWorkDays(result: Shift[], employees: Employee[], ctx: Ctx): Shift[]
       }
     }
     if (!moved) break;
+  }
+  return shifts;
+}
+
+/**
+ * Letzte Sicherung der HARTEN Regel („luôn có 1 Bếp, 1 Phục vụ"): bleibt eine
+ * halbe Stunde ohne Person eines Bereichs, bekommt jemand aus diesem Bereich, der
+ * an dem Tag frei hat, einen 3-h-Dienst über die Lücke – und gibt dieselbe Zeit an
+ * seinen längsten anderen Diensten ab (Monatsvertrag: im Monat, Wochenvertrag: in
+ * der Woche). Vertrag, 9 h je Tag und 6 Tage am Stück/je Woche bleiben gewahrt;
+ * die Tageszahl (Anw.-Tage) darf dafür um einen Tag steigen.
+ */
+function fillHardGaps(result: Shift[], employees: Employee[], ctx: Ctx): Shift[] {
+  let shifts = [...result];
+  const weekdayOf = (date: string) => effectiveWeekdayKey(date, ctx.holidays);
+  /** Halbe Stunden eines Tages, in denen ein Bereich laut harter Regel fehlt. */
+  const gapsOn = (date: string, list: Shift[]) => {
+    const day = ctx.days.get(date)!;
+    const out: { group: StaffGroup; minute: number }[] = [];
+    if (day.closed) return out;
+    for (const window of staffingWindows(day.blocks, weekdayOf(date), ctx.present, ctx.profile)) {
+      if (!window.hard) continue;
+      for (let minute = window.startMinutes; minute < window.endMinutes; minute += SLOT) {
+        const staffed = list.some((s) => s.date === date && window.groups.includes(ctx.groupOf.get(s.employeeId) ?? "SERVICE") && workingAt(s, minute));
+        if (!staffed) out.push({ group: window.groups[0], minute });
+      }
+    }
+    return out;
+  };
+  const resize = (shift: Shift, paid: number, keepEnd: boolean): Shift | null => {
+    if (paid < MIN_SHIFT) return null;
+    const presence = paid + calculatePause(paid);
+    const start = keepEnd ? shift.endMinutes - presence : shift.startMinutes;
+    const next = makeShift(shift.employeeId, shift.date, start, paid, shift.shiftType === "LATE" ? "LATE" : "EARLY", weekdayOf(shift.date), ctx.profile);
+    return { ...next, id: shift.id };
+  };
+
+  for (const [date, day] of ctx.days) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const gaps = gapsOn(date, shifts);
+      if (gaps.length === 0) break;
+      const { group, minute } = gaps[0];
+      let fixed = false;
+      for (const employee of employees) {
+        if (fixed) break;
+        if (staffGroupOf(employee) !== group || employee.fixedShift || !mayWorkOn(employee, date)) continue;
+        const own = shifts.filter((s) => s.employeeId === employee.id);
+        if (own.some((s) => s.date === date)) continue;
+        const dates = new Set([...own.map((s) => s.date), ...(employee.blockedDates ?? [])]);
+        dates.add(date);
+        if (maxConsecutiveRun(dates) > 6) continue;
+        if ([...dates].filter((d) => weekStartOf(d) === weekStartOf(date)).length > dayLimit(employee)) continue;
+        // 3-h-Dienst über die Lücke, innerhalb der Blöcke, in denen die Person arbeiten darf.
+        const block = workBlocksFor(employee, day.blocks, weekdayOf(date)).find((b) => b.startMinutes <= minute && minute < b.endMinutes);
+        if (!block || block.endMinutes - block.startMinutes < MIN_SHIFT) continue;
+        const start = Math.max(block.startMinutes, Math.min(minute, block.endMinutes - MIN_SHIFT));
+        const added = makeShift(employee.id, date, start, MIN_SHIFT, start < 16 * 60 ? "EARLY" : "LATE", weekdayOf(date), ctx.profile);
+        // Dieselbe Zeit an anderen Diensten abgeben (längste zuerst), ohne neue Lücke.
+        let rest = MIN_SHIFT;
+        let next = [...shifts, added];
+        const donors = own
+          .filter((s) => employee.weeklyHours == null || weekStartOf(s.date) === weekStartOf(date))
+          .sort((a, b) => b.paidMinutes - a.paidMinutes);
+        for (const donor of donors) {
+          while (rest > 0) {
+            const current = next.find((s) => s.id === donor.id)!;
+            let best: Shift | null = null;
+            for (const keepEnd of [false, true]) {
+              const smaller = resize(current, current.paidMinutes - SLOT, keepEnd);
+              if (!smaller) continue;
+              const trial = next.map((s) => (s.id === donor.id ? smaller : s));
+              if (gapsOn(donor.date, trial).length > gapsOn(donor.date, next).length) continue;
+              best = smaller;
+              break;
+            }
+            if (!best) break;
+            next = next.map((s) => (s.id === donor.id ? best! : s));
+            rest -= SLOT;
+          }
+          if (rest === 0) break;
+        }
+        if (rest === 0 && gapsOn(date, next).length < gaps.length) {
+          shifts = next;
+          fixed = true;
+        }
+      }
+      if (!fixed) break;
+    }
   }
   return shifts;
 }
@@ -1040,6 +1142,7 @@ export function generateWeeklySchedule(rawInput: WeeklyInput, existing: Shift[] 
   result = topUpShortfalls(result, employees, budgets, ctx);
   result = moveWorkDays(result, employees, ctx);
   result = rebalanceWithinWeeks(result, employees, ctx);
-  return improveCoverage(result, employees, ctx)
+  result = fillHardGaps(result, employees, ctx);
+  return fillHardGaps(improveCoverage(result, employees, ctx), employees, ctx)
     .sort((a, b) => a.date.localeCompare(b.date) || a.startMinutes - b.startMinutes || a.employeeId.localeCompare(b.employeeId));
 }
