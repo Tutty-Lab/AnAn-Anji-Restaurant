@@ -10,7 +10,6 @@ import {
 } from "../lib/pdf";
 import { chromeIntentUrl, detectInAppBrowser } from "../lib/inAppBrowser";
 import { isScheduleYearAllowed, SCHEDULE_YEAR_RANGE_LABEL } from "../lib/years";
-import { weeksOfMonth } from "../lib/weeks";
 import { effectiveWeekdayKey } from "../lib/workHours";
 import { publicHolidays } from "../lib/holidays";
 
@@ -43,14 +42,6 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
   // ── Auswahl: WER (eine Person oder der ganze Laden) und WAS ─────────────
   // who: "all" = ganzer Laden, sonst eine employeeId.
   const [who, setWho] = useState<string>("all");
-  // what: "stundenzettel" (Monats-Stundenzettel) | "sz-<weekStart>" (eine Woche).
-  const [what, setWhat] = useState<string>("stundenzettel");
-
-  const weeks = useMemo(
-    () => weeksOfMonth(schedule.year, schedule.month),
-    [schedule.year, schedule.month],
-  );
-
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<string>("");
   /** Lỗi tạo PDF – hiện ngay trên trang (alert bị trình duyệt nhúng chặn). */
@@ -184,23 +175,9 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
     </div>
   );
 
-  // Wochen-Stundenzettel: nur die Tage dieser Woche, mit Wochentitel oben rechts.
-  function szWeekFor(weekStart: string): { dates: string[]; label: string } | null {
-    const w = weeks.find((x) => x.weekStart === weekStart);
-    if (!w) return null;
-    return { dates: w.dates, label: `Woche ${w.label}${schedule.year}` };
-  }
-
+  // Immer der ganze Monat (Wochen-Stundenzettel gibt es nicht mehr).
   function onPdf() {
-    if (what === "stundenzettel") {
-      void doPdf(chosenEmployees, `Stundenzettel_${whoTag}_${monthTag}.pdf`);
-      return;
-    }
-    const weekStart = what.slice(3);
-    const sz = szWeekFor(weekStart);
-    if (sz) {
-      void doPdf(chosenEmployees, `Stundenzettel_${whoTag}_${monthTag}_tuan_${weekStart}.pdf`, sz);
-    }
+    void doPdf(chosenEmployees, `Stundenzettel_${whoTag}_${monthTag}.pdf`);
   }
 
   // Vùng in KHÔNG được dọn theo sự kiện "afterprint": trên Android sự kiện đó
@@ -251,20 +228,6 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
               {schedule.employees.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.name}
-                </option>
-              ))}
-            </select>
-            {/* WAS: cả tháng hoặc một tuần */}
-            <select
-              aria-label="Kỳ"
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 sm:flex-none"
-              value={what}
-              onChange={(e) => setWhat(e.target.value)}
-            >
-              <option value="stundenzettel">Cả tháng</option>
-              {weeks.map((w) => (
-                <option key={`sz-${w.weekStart}`} value={`sz-${w.weekStart}`}>
-                  Tuần {w.label}
                 </option>
               ))}
             </select>
