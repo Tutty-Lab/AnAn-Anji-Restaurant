@@ -18,8 +18,16 @@ import { employmentShortVi, roleLabelVi } from "../lib/employment";
 import { presentGroups, staffGroupOf, staffingWindows, workingAt, type StaffGroup } from "../lib/staffing";
 import { monthlyTargetMinutesFor, SCHEDULE_SLOT_MINUTES } from "../lib/contract";
 import { StaffingReport } from "./StaffingReport";
-import { PauseLabel } from "./PauseLabel";
 import { CoverageChart } from "./CoverageChart";
+
+/** „17", „11½" (halbe Stunde), sonst „11:15" – so bleibt die Zelle schmal (wie demo-studenzettell). */
+function shortTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (m === 0) return String(h);
+  if (m === 30) return `${h}½`;
+  return minutesToTime(minutes);
+}
 
 function isWeekendKey(iso: string): boolean {
   const k = weekdayKeyOf(parseIsoDate(iso));
@@ -214,61 +222,53 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
         </div>
       )}
 
-      {/* Chuyển chế độ xem */}
+      {/* Eine Leiste wie demo-studenzettell: rechts „Xem theo" (Tháng / Ngày / Độ phủ). */}
       {hasEmployees && (
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 mb-3">
-          <button
-            onClick={() => setView("day")}
-            aria-pressed={view === "day"}
-            className={`px-3 py-1.5 text-sm rounded-md ${
-              view === "day" ? "bg-slate-900 text-white" : "text-slate-600"
-            }`}
-          >
-            Theo ngày
-          </button>
-          <button
-            onClick={() => setView("grid")}
-            aria-pressed={view === "grid"}
-            className={`px-3 py-1.5 text-sm rounded-md ${
-              view === "grid" ? "bg-slate-900 text-white" : "text-slate-600"
-            }`}
-          >
-            Bảng tháng
-          </button>
-          <button
-            onClick={() => setView("coverage")}
-            aria-pressed={view === "coverage"}
-            className={`px-3 py-1.5 text-sm rounded-md ${
-              view === "coverage" ? "bg-slate-900 text-white" : "text-slate-600"
-            }`}
-          >
-            Độ phủ
-          </button>
-        </div>
-      )}
-
-      {/* Wochenwahl für das Besetzungsdiagramm. */}
-      {hasEmployees && view === "coverage" && (
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          {weeks.map((w, idx) => {
-            const printed = (schedule.printedWeeks ?? []).includes(w.weekStart);
-            return (
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          {view === "coverage" && weeks.length > 0 && (
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white">
               <button
-                key={w.weekStart}
-                onClick={() => setWeekIndex(idx)}
-                aria-pressed={idx === weekIndex}
-                className={`rounded border px-3 py-1.5 text-sm ${
-                  idx === weekIndex
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-                title={printed ? "Tuần này đã in" : undefined}
+                type="button"
+                onClick={() => setWeekIndex((i) => Math.max(0, i - 1))}
+                disabled={weekIndex === 0}
+                aria-label="Tuần trước"
+                className="px-2.5 py-1.5 text-slate-600 disabled:opacity-30"
               >
-                {w.label}
-                {printed && " ✓"}
+                ‹
               </button>
-            );
-          })}
+              <select
+                aria-label="Tuần"
+                value={Math.min(weekIndex, weeks.length - 1)}
+                onChange={(e) => setWeekIndex(Number(e.target.value))}
+                className="border-x border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-800"
+              >
+                {weeks.map((w, idx) => (
+                  <option key={w.weekStart} value={idx}>
+                    {w.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setWeekIndex((i) => Math.min(weeks.length - 1, i + 1))}
+                disabled={weekIndex >= weeks.length - 1}
+                aria-label="Tuần sau"
+                className="px-2.5 py-1.5 text-slate-600 disabled:opacity-30"
+              >
+                ›
+              </button>
+            </div>
+          )}
+          <select
+            aria-label="Xem theo"
+            value={view}
+            onChange={(e) => setView(e.target.value as typeof view)}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800"
+          >
+            <option value="grid">Tháng</option>
+            <option value="day">Ngày</option>
+            <option value="coverage">Độ phủ</option>
+          </select>
         </div>
       )}
 
@@ -317,11 +317,9 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
           <table className="border-collapse text-xs">
             <thead>
               <tr>
-                <th className="sticky left-0 z-20 bg-slate-100 border-b border-r border-slate-200 px-2 py-2 text-left min-w-[130px]">
+                <th className="sticky left-0 z-20 bg-slate-100 border-b border-r border-slate-200 px-1.5 py-1 text-left w-[80px] max-w-[80px]">
                   Nhân viên
                 </th>
-                <th className="bg-slate-100 border-b border-slate-200 px-2 py-2 text-left">Loại</th>
-                <th className="bg-slate-100 border-b border-slate-200 px-2 py-2 text-right">Định mức</th>
                 {gridDates.map((d) => {
                   const day = parseIsoDate(d).getDate();
                   const wk = WEEKDAY_SHORT_VI[weekdayKeyOf(parseIsoDate(d))];
@@ -344,12 +342,12 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
                             ? `Giờ riêng${ov.note ? " · " + ov.note : ""}`
                             : undefined
                       }
-                      className={`border-b border-l border-slate-200 px-1 py-1 text-center min-w-[88px] ${headerBg}`}
+                      className={`border-b border-l border-slate-200 px-0.5 py-1 text-center min-w-[40px] ${headerBg}`}
                     >
                       <div className="font-semibold">{day}</div>
                       <div className="text-[10px] text-slate-500">{wk}</div>
-                      {closed && <div className="text-[9px] text-rose-600 font-medium">Đóng cửa</div>}
-                      {!closed && ov && <div className="text-[9px] text-sky-700 font-medium">Giờ riêng</div>}
+                      {closed && <div className="text-[9px] text-rose-600 font-medium">Đóng</div>}
+                      {!closed && ov && <div className="text-[9px] text-sky-700 font-medium">Riêng</div>}
                     </th>
                   );
                 })}
@@ -368,15 +366,12 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
                 const diff = sum?.diffMinutes ?? -sollMin;
                 return (
                   <tr key={emp.id} className="hover:bg-slate-50/50">
-                    <td className="sticky left-0 z-10 bg-white border-b border-r border-slate-200 px-2 py-1 font-medium whitespace-nowrap">
+                    {/* Nur der Name (gekürzt); Art, Nhóm und Soll stehen im Tooltip und im Tab Nhân viên. */}
+                    <td
+                      className="sticky left-0 z-10 bg-white border-b border-r border-slate-200 px-1.5 py-1 font-medium w-[80px] max-w-[80px] truncate"
+                      title={`${emp.name} · ${employmentShortVi(emp.employmentType)} · ${roleLabelVi(emp.workRole, store.profile)} · ${minutesToShortHours(sollMin)}`}
+                    >
                       {emp.name}
-                    </td>
-                    <td className="border-b border-slate-100 px-2 py-1 text-slate-500 whitespace-nowrap">
-                      {employmentShortVi(emp.employmentType)}
-                      <span className="block text-[10px] text-slate-400">{roleLabelVi(emp.workRole, store.profile)}</span>
-                    </td>
-                    <td className="border-b border-slate-100 px-2 py-1 text-right text-slate-500">
-                      {minutesToShortHours(sollMin)}
                     </td>
                     {gridDates.map((d) => {
                       const dienste = shiftMap.get(`${emp.id}#${d}`) ?? [];
@@ -385,46 +380,22 @@ export function ScheduleTab({ store }: { store: UseScheduleReturn }) {
                         <td
                           key={d}
                           onClick={() => setSelected({ employeeId: emp.id, date: d })}
-                          className={`border-b border-l border-slate-200 px-1 py-1 text-center cursor-pointer align-middle ${cellClass(
+                          className={`border-b border-l border-slate-200 px-0.5 py-1 text-center cursor-pointer align-middle ${cellClass(
                             shift,
                           )}`}
                           title="Bấm để sửa"
                         >
                           {shift ? (
-                            <div className="leading-tight space-y-1">
-                              {dienste.map((x, idx) => {
-                                const isMulti = dienste.length > 1;
-                                const shiftTag = isMulti
-                                  ? idx === 0
-                                    ? "Ca sáng"
-                                    : idx === 1
-                                      ? "Ca chiều"
-                                      : `Ca ${idx + 1}`
-                                  : null;
-                                return (
-                                  <div
-                                    key={x.id}
-                                    className={idx > 0 ? "border-t border-slate-200/90 pt-1 mt-0.5" : ""}
-                                  >
-                                    <div className="font-medium flex items-center justify-center gap-1">
-                                      {shiftTag && (
-                                        <span className="inline-block text-[9px] font-semibold text-slate-600 bg-slate-100/90 border border-slate-300/80 rounded px-1">
-                                          {shiftTag}
-                                        </span>
-                                      )}
-                                      <span>
-                                        {minutesToTime(x.startMinutes)}–{minutesToTime(x.endMinutes)}
-                                      </span>
-                                    </div>
-                                    <div className="text-[10px] opacity-80">
-                                      {minutesToShortHours(x.paidMinutes)} · <PauseLabel shift={x} />
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                            // Kurz: „11½–14½" / „17–22" je Dienst untereinander (wie demo-studenzettell).
+                            <div className="leading-tight whitespace-nowrap text-[10px] font-medium">
+                              {dienste.map((x) => (
+                                <div key={x.id} title={`${minutesToTime(x.startMinutes)}–${minutesToTime(x.endMinutes)} · ${minutesToShortHours(x.paidMinutes)}`}>
+                                  {shortTime(x.startMinutes)}–{shortTime(x.endMinutes)}
+                                </div>
+                              ))}
                             </div>
                           ) : (
-                            <span className="text-[11px]">Nghỉ</span>
+                            <span className="text-[10px] text-slate-300">–</span>
                           )}
                         </td>
                       );
@@ -503,8 +474,6 @@ function SummaryRow({
       <td className={`sticky left-0 z-10 bg-slate-50 border-t border-r border-slate-200 px-2 py-1 font-medium whitespace-nowrap ${labelClass}`}>
         {label}
       </td>
-      <td className="border-t border-slate-200" />
-      <td className="border-t border-slate-200" />
       {dates.map((d) => (
         <td key={d} className="border-t border-l border-slate-200 px-1 py-1 text-center">
           {value(d)}
@@ -550,8 +519,6 @@ function CoverageRow({
       <td className={`sticky left-0 z-10 bg-slate-50 border-t border-r border-slate-200 px-2 py-1 font-medium whitespace-nowrap ${labelClass}`}>
         {label} <span className="text-[11px] font-normal text-slate-400">ít nhất</span>
       </td>
-      <td className="border-t border-slate-200" />
-      <td className="border-t border-slate-200" />
       {dates.map((d) => {
         const c = cell(d);
         const tone = !c

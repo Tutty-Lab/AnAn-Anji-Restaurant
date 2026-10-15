@@ -4,17 +4,6 @@ import type { Employee, Schedule } from "../types";
 import { minutesToDecimalHours } from "../lib/time";
 import { monthlyTargetMinutesFor } from "../lib/contract";
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
-  return (
-    <div className="rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-sm">
-      <div className="text-[11px] sm:text-xs text-slate-500 leading-tight">{label}</div>
-      <div className={`text-base sm:text-lg font-semibold leading-tight ${accent ?? "text-slate-900"}`}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
 /** "2026-08-27" -> "27.08." – kurz, weil oft mehrere Tage nebeneinander stehen. */
 function shortDate(iso: string): string {
   const [, month, day] = iso.split("-");
@@ -94,56 +83,125 @@ function underQuotaReason(emp: Employee | undefined, schedule: Schedule): string
   return `do ${parts.join("; ")}.`;
 }
 
-export function Dashboard({ store }: { store: UseScheduleReturn }) {
-  const { schedule, validation, peakGaps, openDates } = store;
-  const vz = schedule.employees.filter((e) => e.employmentType === "VOLLZEIT").length;
-  const tz = schedule.employees.filter((e) => e.employmentType === "TEILZEIT").length;
-  const mj = schedule.employees.filter((e) => e.employmentType === "MINIJOB").length;
-  const az = schedule.employees.filter((e) => e.employmentType === "AZUBI").length;
-  const byId = new Map(schedule.employees.map((e) => [e.id, e] as const));
+/** Kennzahlen EINES Ladens – Grundlage für die Summe und den Kurzstatus je Laden. */
+function storeFigures(store: UseScheduleReturn) {
+  const { schedule, validation, openDates } = store;
   // Wochenverträge (weeklyHours) haben targetMinutes = 0; das Monats-Soll wird
   // erst über die offenen Tage abgeleitet (contract.ts), genau wie in der Prüfung.
   const targetMin = schedule.employees.reduce((s, e) => s + monthlyTargetMinutesFor(e, openDates, schedule.workHours), 0);
   const plannedMin = schedule.shifts.reduce((s, x) => s + x.paidMinutes, 0);
-  const uncoveredMin = Math.max(0, targetMin - plannedMin);
-  const notGenerated = schedule.shifts.length === 0;
+  return {
+    targetMin,
+    plannedMin,
+    notGenerated: schedule.shifts.length === 0,
+    // Warnungen und Fehler getrennt: ein zu hohes Monats-Soll macht den Plan nicht
+    // unbrauchbar, es fehlen nur Stunden, die der Monat nicht hergibt.
+    warnungen: validation.errors.filter((e) => e.severity === "warning"),
+    fehler: validation.errors.filter((e) => e.severity !== "warning"),
+  };
+}
 
-  // Warnungen und Fehler getrennt: ein zu hohes Monats-Soll macht den Plan nicht
-  // unbrauchbar, es fehlen nur Stunden, die der Monat nicht hergibt.
-  const warnungen = validation.errors.filter((e) => e.severity === "warning");
-  const fehler = validation.errors.filter((e) => e.severity !== "warning");
+const hours = (min: number) => `${minutesToDecimalHours(min, 1)} h`;
 
-  const statusValue = notGenerated
-    ? "Chưa tạo lịch"
-    : fehler.length > 0
-      ? `${fehler.length} lỗi`
-      : warnungen.length > 0
-        ? `${warnungen.length} cảnh báo`
-        : "Hợp lệ";
-  const statusAccent = notGenerated
-    ? "text-slate-500"
-    : fehler.length > 0
-      ? "text-rose-600"
-      : warnungen.length > 0
-        ? "text-amber-600"
-        : "text-emerald-600";
+/**
+ * Eine Karte wie in demo-studenzettell: verplante Stunden beider Läden als
+ * Balken + Status, darunter je Laden ein Knopf mit Kurzstatus (wechselt den
+ * angezeigten Laden). Die Hinweise darunter gelten für den gewählten Laden.
+ */
+export function Dashboard({
+  stores,
+  view,
+  onChooseStore,
+}: {
+  stores: readonly UseScheduleReturn[];
+  view: UseScheduleReturn;
+  onChooseStore: (storeId: string) => void;
+}) {
+  const figures = stores.map((store) => ({ store, f: storeFigures(store) }));
+  const sum = (pick: (f: ReturnType<typeof storeFigures>) => number) => figures.reduce((t, x) => t + pick(x.f), 0);
+  const targetMinAll = sum((f) => f.targetMin);
+  const plannedMinAll = sum((f) => f.plannedMin);
+  const uncoveredAll = Math.max(0, targetMinAll - plannedMinAll);
+  const fehlerAll = sum((f) => f.fehler.length);
+  const warnAll = sum((f) => f.warnungen.length);
+  const notGeneratedCount = figures.filter((x) => x.f.notGenerated && x.store.schedule.employees.length > 0).length;
+  const statusText =
+    notGeneratedCount === stores.length
+      ? "Chưa tạo lịch"
+      : fehlerAll > 0
+        ? `${fehlerAll} lỗi`
+        : warnAll > 0
+          ? `${warnAll} cảnh báo`
+          : notGeneratedCount > 0
+            ? `${notGeneratedCount} quán chưa có lịch`
+            : "✓ Hợp lệ";
+  const statusPill =
+    notGeneratedCount === stores.length
+      ? "bg-slate-100 text-slate-500"
+      : fehlerAll > 0
+        ? "bg-rose-50 text-rose-700"
+        : warnAll > 0 || notGeneratedCount > 0
+          ? "bg-amber-50 text-amber-700"
+          : "bg-emerald-50 text-emerald-700";
+  const pct = targetMinAll > 0 ? Math.min(100, Math.round((plannedMinAll / targetMinAll) * 100)) : 0;
+
+  const { schedule, peakGaps } = view;
+  const byId = new Map(schedule.employees.map((e) => [e.id, e] as const));
+  const { notGenerated, warnungen, fehler } = storeFigures(view);
 
   return (
     <div>
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
-        <Stat label="Số nhân viên" value={String(schedule.employees.length)} />
-        <Stat label="Toàn thời gian" value={String(vz)} />
-        <Stat label="Bán thời gian" value={String(tz)} />
-        <Stat label="Minijob / Azubi" value={`${mj} / ${az}`} />
-        <Stat label="Tổng giờ định mức" value={`${minutesToDecimalHours(targetMin, 1)} h`} />
-        <Stat label="Tổng giờ đã xếp" value={`${minutesToDecimalHours(plannedMin, 1)} h`} />
-        <Stat label="Giờ chưa thể xếp" value={`${minutesToDecimalHours(uncoveredMin, 1)} h`} accent={uncoveredMin ? "text-amber-600" : "text-emerald-600"} />
-        <Stat label="Trạng thái kiểm tra" value={statusValue} accent={statusAccent} />
+      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm text-slate-500">Giờ đã xếp</span>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusPill}`}>{statusText}</span>
+        </div>
+        <div className="mt-1 flex items-baseline gap-1.5">
+          <span className="text-2xl font-semibold text-slate-900">{minutesToDecimalHours(plannedMinAll, 0)}</span>
+          <span className="text-sm text-slate-500">/ {hours(targetMinAll)} định mức</span>
+        </div>
+        {/* Dunkel = verplant, Gelb = fehlt noch (Giờ chưa thể xếp). Farbe nur für Status. */}
+        <div className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-slate-100">
+          <div className="bg-slate-700" style={{ width: `${pct}%` }} />
+          {uncoveredAll > 0 && plannedMinAll > 0 && <div className="bg-amber-300" style={{ width: `${100 - pct}%` }} />}
+        </div>
+        {uncoveredAll > 0 && notGeneratedCount < stores.length && (
+          <div className="mt-1.5 text-xs text-slate-600">
+            Còn thiếu <b className="text-amber-700">{hours(uncoveredAll)}</b> chưa xếp được
+          </div>
+        )}
+        {/* Quán đang xem – je Laden ein Knopf mit Kurzstatus. */}
+        <div role="tablist" aria-label="Quán" className="mt-2 flex flex-wrap gap-1.5">
+          {figures.map(({ store, f }) => {
+            const active = store.storeId === view.storeId;
+            const [text, cls] = f.notGenerated
+              ? ["chưa tạo", active ? "text-slate-300" : "text-slate-400"]
+              : f.fehler.length > 0
+                ? [`${f.fehler.length} lỗi`, active ? "text-rose-300" : "text-rose-600"]
+                : f.warnungen.length > 0
+                  ? [`${f.warnungen.length} cảnh báo`, active ? "text-amber-300" : "text-amber-600"]
+                  : ["ổn", active ? "text-emerald-300" : "text-emerald-600"];
+            return (
+              <button
+                key={store.storeId}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onChooseStore(store.storeId)}
+                className={`rounded-lg border px-3 py-1 text-sm font-medium ${
+                  active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {store.profile.shortName} <span className={`text-xs font-normal ${cls}`}>· {text}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {notGenerated && schedule.employees.length > 0 && (
         <div className="mt-2 rounded bg-sky-50 border border-sky-200 text-sky-800 text-sm px-3 py-2">
-          Chưa có lịch. Sang tab „Lịch làm việc" và bấm „Tạo lịch làm việc".
+          {view.profile.shortName}: chưa có lịch — bấm <b>Tạo lịch</b>.
         </div>
       )}
 

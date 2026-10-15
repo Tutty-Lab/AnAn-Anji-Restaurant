@@ -24,13 +24,14 @@ type TabId = "einstellungen" | "mitarbeiter" | "dienstplan" | "stundenzettel";
  * wird (MAIN_TABS); Cài đặt und Tài liệu stecken im Menü ☰ oben rechts – wie
  * in den Apps Shin/Coco/Nieu und Thiên Long.
  */
+// Reihenfolge und Bezeichnungen wie demo-studenzettell: Chấm công · Lịch · Nhân viên.
 const TABS: { id: TabId; label: string }[] = [
-  { id: "dienstplan", label: "Lịch làm việc" },
-  { id: "stundenzettel", label: "Bảng chấm công" },
+  { id: "stundenzettel", label: "Chấm công" },
+  { id: "dienstplan", label: "Lịch" },
   { id: "mitarbeiter", label: "Nhân viên" },
   { id: "einstellungen", label: "Cài đặt" },
 ];
-const MAIN_TABS: TabId[] = ["dienstplan", "stundenzettel", "mitarbeiter"];
+const MAIN_TABS: TabId[] = ["stundenzettel", "dienstplan", "mitarbeiter"];
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => isAuthenticated());
@@ -70,8 +71,25 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
   // steuert beide; angezeigt wird der Stand des ersten Ladens.
   const primary = anan;
 
-  const [tab, setTab] = useState<TabId>("dienstplan");
+  const [tab, setTab] = useState<TabId>("stundenzettel");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  /**
+   * Tải lại: als App vom Home-Bildschirm (iPhone/Safari) gibt es keine
+   * Browserleiste zum Neuladen. Erst nach einer neuen Version fragen (Service
+   * Worker), dann neu laden – so kommen Code UND Daten frisch.
+   */
+  const refreshApp = async () => {
+    setRefreshing(true);
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      // Höchstens 3 s auf die Update-Prüfung warten (schlechtes Netz).
+      await Promise.race([reg?.update(), new Promise((resolve) => setTimeout(resolve, 3000))]);
+    } catch {
+      // egal – trotzdem neu laden
+    }
+    window.location.reload();
+  };
   /** Trang Tài liệu mở riêng; đóng lại thì về đúng tab đang làm. */
   const [docsOpen, setDocsOpen] = useState(false);
 
@@ -126,9 +144,9 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
   return (
     <div className="min-h-screen">
       <header className="no-print bg-slate-900 text-white shadow sticky top-0 z-30">
-        <div className="mx-auto max-w-[1500px] px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-base sm:text-lg font-semibold" title={`bản ${__BUILD__}`}>
+        <div className="mx-auto max-w-[1500px] px-3 sm:px-4 py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="truncate text-base sm:text-lg font-semibold" title={`bản ${__BUILD__}`}>
               AnAn &amp; Anji · Lịch làm việc &amp; Bảng chấm công
             </h1>
             {/* Nur ein SYNC-FEHLER wird gezeigt: dann liegen Daten nur auf diesem Gerät. */}
@@ -136,35 +154,14 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
               <p className="text-xs text-rose-300">Lỗi đồng bộ — dữ liệu chỉ lưu trên máy này</p>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Tháng/năm dùng chung cho cả hai quán – bản in phải cùng kỳ. */}
-            <select
-              aria-label="Tháng"
-              value={`${primary.schedule.year}-${primary.schedule.month}`}
-              onChange={(e) => {
-                const [year, month] = e.target.value.split("-").map(Number);
-                setPeriod({ year, month });
-              }}
-              className="rounded-md border border-slate-600 bg-white px-2 py-1.5 text-sm font-medium text-slate-900"
-            >
-              {(isScheduleYearAllowed(primary.schedule.year)
-                ? SCHEDULE_YEARS
-                : [primary.schedule.year, ...SCHEDULE_YEARS]
-              ).flatMap((y) =>
-                MONTH_NAMES_VI.map((_, i) => (
-                  <option key={`${y}-${i + 1}`} value={`${y}-${i + 1}`} className="bg-white text-slate-900">
-                    {String(i + 1).padStart(2, "0")}/{y}
-                  </option>
-                )),
-              )}
-            </select>
+          <div className="flex shrink-0 items-center gap-2">
             {/* Aus dem Menü geöffnete Seite: steht direkt neben dem Menü, mit ✕ zurück. */}
             {(docsOpen || !MAIN_TABS.includes(tab)) && (
               <span className="inline-flex items-center gap-1 rounded-md bg-white py-1.5 pl-3 pr-1 text-sm font-medium text-slate-900">
                 {docsOpen ? "Tài liệu" : TABS.find((t) => t.id === tab)?.label}
                 <button
                   type="button"
-                  onClick={() => openTab("dienstplan")}
+                  onClick={() => openTab("stundenzettel")}
                   aria-label="Đóng"
                   className="rounded px-1.5 text-slate-400 hover:text-slate-900"
                 >
@@ -172,6 +169,16 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
                 </button>
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => void refreshApp()}
+              disabled={refreshing}
+              aria-label="Tải lại"
+              title="Tải lại"
+              className="flex h-9 w-9 items-center justify-center rounded bg-slate-700 text-lg leading-none hover:bg-slate-600 disabled:opacity-60"
+            >
+              <span className={refreshing ? "inline-block animate-spin" : "inline-block"}>↻</span>
+            </button>
             <div className="relative">
               <button
                 type="button"
@@ -243,31 +250,6 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
 
-      {/* Quán đang xem – một hàng nhãn dùng chung cho mọi tab. */}
-      {!docsOpen && (
-        <div className="no-print mx-auto max-w-[1500px] px-3 sm:px-4 pt-4">
-          <div role="tablist" aria-label="Quán" className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
-            {stores.map((s) => {
-              const active = s.storeId === view.storeId;
-              return (
-                <button
-                  key={s.storeId}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => chooseStore(s.storeId)}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                    active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
-                >
-                  {s.profile.shortName}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <div className="no-print mx-auto max-w-[1500px] px-3 sm:px-4 pt-4 space-y-3">
         {runIssues.length > 0 && (
           <div role="alert" className="rounded border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900">
@@ -292,36 +274,61 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
             </ul>
           </div>
         )}
-        <Dashboard key={view.storeId} store={view} />
+        <Dashboard stores={stores} view={view} onChooseStore={chooseStore} />
       </div>
 
       <nav className="no-print mx-auto max-w-[1500px] px-3 sm:px-4 mt-4">
-        <div className="flex flex-wrap gap-2">
-          {TABS.filter((t) => MAIN_TABS.includes(t.id)).map((t) => {
-            const active = !docsOpen && tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => openTab(t.id)}
-                aria-current={active ? "page" : undefined}
-                className={`px-3.5 py-2 text-sm font-medium rounded-full border ${
-                  active
-                    ? "bg-slate-900 text-white border-slate-900"
-                    : "bg-white text-slate-600 border-slate-200 hover:text-slate-900 hover:border-slate-300"
-                }`}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => setGenDialogOpen(true)}
-            disabled={stores.every((s) => s.schedule.employees.length === 0)}
-            className="ml-auto rounded-lg border border-emerald-700 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40"
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Eine Zeile wie demo-studenzettell: Chấm công · Lịch · Nhân viên als Segment, rechts Tháng + Tạo lịch. */}
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5">
+            {TABS.filter((t) => MAIN_TABS.includes(t.id)).map((t) => {
+              const active = !docsOpen && tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => openTab(t.id)}
+                  aria-current={active ? "page" : undefined}
+                  className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium ${
+                    active ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+          {/* Tháng/năm dùng chung cho cả hai quán – bản in phải cùng kỳ. */}
+          <select
+            aria-label="Tháng"
+            value={`${primary.schedule.year}-${primary.schedule.month}`}
+            onChange={(e) => {
+              const [year, month] = e.target.value.split("-").map(Number);
+              setPeriod({ year, month });
+            }}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-800"
           >
-            Tạo lịch
-          </button>
+            {(isScheduleYearAllowed(primary.schedule.year)
+              ? SCHEDULE_YEARS
+              : [primary.schedule.year, ...SCHEDULE_YEARS]
+            ).flatMap((y) =>
+              MONTH_NAMES_VI.map((_, i) => (
+                <option key={`${y}-${i + 1}`} value={`${y}-${i + 1}`} className="bg-white text-slate-900">
+                  {String(i + 1).padStart(2, "0")}/{y}
+                </option>
+              )),
+            )}
+          </select>
+            {/* „Tạo lịch" – wichtigste Aktion, rechts in der Tab-Zeile. */}
+            <button
+              type="button"
+              onClick={() => setGenDialogOpen(true)}
+              disabled={stores.every((s) => s.schedule.employees.length === 0)}
+              className="whitespace-nowrap rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-40"
+            >
+              Tạo lịch
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -341,7 +348,7 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
           onConfirm={(target) => {
             setGenDialogOpen(false);
             generateAll(target);
-            openTab("dienstplan");
+            if (tab !== "dienstplan") openTab("stundenzettel");
           }}
         />
       )}

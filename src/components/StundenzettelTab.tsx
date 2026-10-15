@@ -222,9 +222,8 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
     <>
       {/* Điều khiển (không in) */}
       <div className="no-print">
-        {/* ---- In & Xuất ---- */}
-        <div className="rounded-lg border border-slate-200 bg-white p-3 mb-4">
-          <div className="text-sm font-medium text-slate-700 mb-2">Xuất file PDF</div>
+        {/* ---- Xuất PDF: eine Leiste rechts wie demo-studenzettell (Cho ai · Kỳ · Xuất PDF) ---- */}
+        <div className="mb-3">
 
           {inApp.inApp && !readyPdf && (
             <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
@@ -239,68 +238,42 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
             </div>
           )}
 
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {/* WER */}
-            <label className="flex w-full min-w-0 flex-col gap-1 sm:w-auto">
-              <span className="text-xs text-slate-500">Cho ai</span>
-              <select
-                className="w-full max-w-full rounded border border-slate-300 px-2 py-2 text-sm sm:w-auto sm:min-w-[10rem]"
-                value={who}
-                onChange={(e) => setWho(e.target.value)}
-              >
-                <option value="all">Tất cả (cả quán)</option>
-                {schedule.employees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {/* WAS */}
-            <label className="flex w-full min-w-0 flex-col gap-1 sm:w-auto">
-              <span className="text-xs text-slate-500">Nội dung</span>
-              <select
-                className="w-full max-w-full rounded border border-slate-300 px-2 py-2 text-sm sm:w-auto sm:min-w-[14rem]"
-                value={what}
-                onChange={(e) => setWhat(e.target.value)}
-              >
-                <option value="stundenzettel">Bảng chấm công (Stundenzettel) — cả tháng</option>
-                {weeks.map((w) => (
-                  <option key={`sz-${w.weekStart}`} value={`sz-${w.weekStart}`}>
-                    Bảng chấm công (Stundenzettel) — tuần {w.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {/* Hành động */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                disabled={pdfBusy || !hasSchedule || !isScheduleYearAllowed(schedule.year)}
-                onClick={onPdf}
-                className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 active:bg-slate-800 disabled:opacity-40 shadow-sm"
-              >
-                {pdfBusy ? `Đang tạo PDF ${pdfProgress ? `(${pdfProgress})` : "…"}` : "Xuất PDF"}
-              </button>
-              <button
-                type="button"
-                disabled={pdfBusy || schedule.employees.length === 0}
-                onClick={() => {
-                  if (isLocked) unlockMonth();
-                  generate();
-                }}
-                className="rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 active:bg-slate-100 shadow-sm"
-                title="Tạo lại lịch mới theo quy tắc ca liền Chủ nhật"
-              >
-                Tạo lại lịch
-              </button>
-              {pdfBusy && (
-                <span className="text-sm text-slate-500">
-                  {pdfProgress ? `Đang xử lý trang ${pdfProgress}…` : "Đang tạo PDF…"}
-                </span>
-              )}
-            </div>
+            <select
+              aria-label="Cho ai"
+              className="max-w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800"
+              value={who}
+              onChange={(e) => setWho(e.target.value)}
+            >
+              <option value="all">Cả quán ({schedule.employees.length} người)</option>
+              {schedule.employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+            {/* WAS: cả tháng hoặc một tuần */}
+            <select
+              aria-label="Kỳ"
+              className="max-w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800"
+              value={what}
+              onChange={(e) => setWhat(e.target.value)}
+            >
+              <option value="stundenzettel">Cả tháng</option>
+              {weeks.map((w) => (
+                <option key={`sz-${w.weekStart}`} value={`sz-${w.weekStart}`}>
+                  Tuần {w.label}
+                </option>
+              ))}
+            </select>
+            <button
+              disabled={pdfBusy || !hasSchedule || !isScheduleYearAllowed(schedule.year)}
+              onClick={onPdf}
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 active:bg-slate-800 disabled:opacity-40"
+            >
+              {pdfBusy ? `Đang tạo PDF ${pdfProgress ? `(${pdfProgress})` : "…"}` : "Xuất PDF"}
+            </button>
           </div>
 
           {pdfError && (
@@ -370,22 +343,11 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
             </div>
           )}
 
-          {!hasSchedule && (
-            <p className="mt-2 text-sm text-slate-400">
-              Chưa có lịch. Sang tab „Lịch làm việc" để tạo.
-            </p>
-          )}
           {!isScheduleYearAllowed(schedule.year) && (
             <p role="alert" className="mt-2 text-sm text-rose-700">
               Chỉ xuất lịch cho các năm {SCHEDULE_YEAR_RANGE_LABEL}. Tạo lịch cho năm trong khoảng này ở tab „Lịch làm việc".
             </p>
           )}
-
-          <p className="mt-2 text-xs text-slate-500">
-            <b>Bảng chấm công (Stundenzettel)</b> theo mẫu tiếng Đức để nộp — một tờ mỗi người, chọn
-            cả tháng hoặc từng tuần. Trên máy tính, Chrome và Safari, PDF tải thẳng về máy; mở
-            app từ link trong Zalo/Messenger/Facebook thì bấm <b>Lưu / Chia sẻ PDF</b> sau khi tạo.
-          </p>
 
           {isLocked && (
             <div className="mt-3 rounded bg-amber-50 border border-amber-200 text-amber-900 text-sm px-3 py-2">
@@ -445,11 +407,7 @@ export function StundenzettelTab({ store }: { store: UseScheduleReturn }) {
         {/* Xem trước trên màn hình cho nhân viên đã chọn */}
         {previewEmployee && (
           <>
-            <div className="mb-1 text-xs text-slate-500">
-              Xem trước bảng chấm công: <b>{previewEmployee.name}</b>
-              {who === "all" && " (chọn một người ở ô „Cho ai“ để xem người khác)"}
-            </div>
-            <div className="rounded-lg border border-slate-300 shadow-sm bg-white overflow-x-auto">
+            <div className="rounded-lg border border-slate-200 shadow-sm bg-white overflow-x-auto">
               <StundenzettelPage schedule={schedule} employee={previewEmployee} />
             </div>
           </>
