@@ -136,7 +136,8 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
 
   return (
     <div className="min-h-screen">
-      <header className="no-print bg-slate-900 text-white shadow sticky top-0 z-30">
+      {/* iPhone-App vom Home-Bildschirm (black-translucent): Inhalt unter die Statusleiste schieben. */}
+      <header className="no-print bg-slate-900 text-white shadow sticky top-0 z-30 pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-[1500px] px-3 sm:px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="truncate text-base sm:text-lg font-semibold" title={`bản ${__BUILD__}`}>
@@ -355,7 +356,7 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
       )}
 
       {/* Tab Lịch: volle Breite – mehr Platz für Tage und Debug-Zeilen. */}
-      <main className={`mx-auto px-3 sm:px-4 py-4 ${tab === "dienstplan" && !docsOpen ? "max-w-none" : "max-w-[1500px]"}`}>
+      <main className={`mx-auto px-3 sm:px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] ${tab === "dienstplan" && !docsOpen ? "max-w-none" : "max-w-[1500px]"}`}>
         {docsOpen ? (
           <div className="no-print">
             <button
