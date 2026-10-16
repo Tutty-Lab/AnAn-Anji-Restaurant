@@ -64,8 +64,8 @@ die Küche vor.
   (ab Öffnung). Der Scheduler gewichtet harte Regeln zehnfach
   (`hardRuleFactor`); sie werden auch gemeldet, wenn ein Bereich keine Person hat.
 - **Weich (beide, AnAn/Anji):** Service T2–T5: mittags 12–14 2–3 / 3 (Anji),
-  18–20 3–4, 20–21 2, 21–Schluss 1. Fr–So: mittags ≥ 2 / 3, abends 18–22 ≥ 3 / 4,
-  Schluss 2. Küche: Vorbereitung 1, mittags 2 / 3, Fr–So abends 18–21 3 / 4.
+  18–20 3–4, 20–21 2, 21–Schluss 1. Fr–So: mittags ≥ 2 / 3, 18–21 ≥ 3 / 4,
+  21–Schluss 2. Küche: Vorbereitung 1, mittags 2 / 3, Fr–So abends 18–21 3 / 4.
   AnAn-Fahrer: Kernzeit 18:00–21:00 (So/Feiertag 18:00–22:00): Mo–Sa 1, So 2.
 - Reicht das Personal nicht, fallen weiche Lücken bevorzugt auf Mo–Mi
   (Fr–So ×3, Mo–Mi ×0,5); harte Regeln wiegen ×100.

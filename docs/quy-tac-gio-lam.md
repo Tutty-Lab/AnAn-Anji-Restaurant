@@ -40,7 +40,7 @@ Restaurant AnAn:
 - **Không đủ người:** chỗ thiếu theo quy tắc mềm được dồn sang T2–T4 (T6, T7, CN phạt gấp 3, T2–T4 một nửa). Quy tắc cứng luôn ưu tiên hơn.
 - **Đông nhất T6, T7, CN** (hệ số 1,5; T2–T5 1,0).
 - **Quy tắc mềm – Phục vụ T2–T5:** trưa 12–14 2–3 · 18–20 3–4 · 20–21 2 · 21–đóng cửa 1.
-- **Quy tắc mềm – Phục vụ T6–CN:** trưa 12–14 ≥ 2 · tối 18–22 ≥ 3 · đóng cửa 22–22:30 ≥ 2.
+- **Quy tắc mềm – Phục vụ T6–CN:** trưa 12–14 ≥ 2 · 18–21 ≥ 3 · 21–đóng cửa ≥ 2.
 - **Quy tắc mềm – Bếp:** 10:30 1 người · sáng 12–14 2 · T6–CN tối 18–21 3.
 - **Quy tắc mềm – Lái xe:** chủ yếu tối (18:00–21:00, CN/lễ 18:00–22:00): trong tuần 1 người, CN luôn 2. Giờ hợp đồng dư thì làm thêm buổi trưa.
 - Sáng = 12:00–14:00, chiều/tối = 18:00–22:00 (giờ đông).
@@ -53,7 +53,7 @@ Restaurant Anji (cùng app, cùng giờ mở và giờ làm như AnAn):
 - **Quy tắc cứng:** luôn có **ít nhất 1 bồi và 1 bếp**.
 - **Đông nhất T6, T7, CN** (hệ số 1,5; T2–T5 1,0).
 - **Quy tắc mềm – Bồi T2–T5:** trưa 12–14 2–3 · 18–20 3–4 · 20–21 2 · 21–đóng cửa 1.
-- **Quy tắc mềm – Bồi T6–CN:** trưa ≥ 3 · tối 18–22 ≥ 4 · đóng cửa 22–22:30 ≥ 2.
+- **Quy tắc mềm – Bồi T6–CN:** trưa ≥ 3 · 18–21 ≥ 4 · 21–đóng cửa ≥ 2.
 - **Quy tắc mềm – Bếp:** 10:30 1 người · T2–CN sáng 3 · T6–CN tối 18–21 4.
 - Giờ đông, mở cửa 1 + 1 và đóng cửa 22:00–22:30 (2 bồi, 1 bếp) như AnAn.
 - **Nhóm:** Bếp, Bồi (không có lái xe). Ha Phuong Nguyen, Quang Tien La, Tien Viet Pham là Azubi làm bồi.
