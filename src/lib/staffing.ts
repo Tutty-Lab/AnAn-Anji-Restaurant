@@ -76,6 +76,8 @@ export type StaffingWindow = {
   groups: readonly StaffGroup[];
   /** Harte Regel des Betriebs (muss immer erfüllt sein) – sonst weiche Vorgabe. */
   hard: boolean;
+  /** Gewicht einer weichen Regel (Standard 1) – „mindestens 2" geht vor höheren Zahlen. */
+  weight?: number;
 };
 
 /** Ab hier keine Pause mehr, wenn es sich vermeiden lässt (Abschluss des Abends). */
@@ -118,6 +120,8 @@ export type StaffingRule = {
   maxStaff: number;
   scaled: boolean;
   hard: boolean;
+  /** Gewicht der weichen Regel im Planer (Standard 1). */
+  weight?: number;
   groups: readonly StaffGroup[];
   /** Nur an diesen (effektiven) Wochentagen; fehlt = an jedem offenen Tag. */
   weekdays?: readonly WeekdayKey[];
@@ -147,6 +151,9 @@ const lunch = clip(LUNCH_PEAK.startMinutes, LUNCH_PEAK.endMinutes);
 const ANAN_RULES: readonly StaffingRule[] = [
   { label: "Bếp luôn có người", when: "suốt giờ làm (gồm 30′ chuẩn bị)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["KITCHEN"], windows: wholeBlocks },
   { label: "Phục vụ luôn có người", when: "suốt giờ mở cửa (gồm người chưa gán nhóm)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["SERVICE"], windows: (blocks) => guestBlocks(blocks) },
+  // Ưu tiên (chủ quán): giờ đông ít nhất 2 phục vụ mọi ngày – trước người thứ 3, thứ 4.
+  { label: "Phục vụ ít nhất 2 (12–14)", when: "12:00 – 14:00, mọi ngày (ưu tiên)", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, weight: 15, groups: ["SERVICE"], windows: lunch },
+  { label: "Phục vụ ít nhất 2 (18–21)", when: "18:00 – 21:00, mọi ngày (ưu tiên)", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, weight: 15, groups: ["SERVICE"], windows: clip(18 * 60, 21 * 60) },
   { label: "Bếp chuẩn bị", when: "30′ trước giờ mở (T2–T7 10:30, CN/lễ 11:30)", minStaff: 1, maxStaff: 1, scaled: false, hard: false, groups: ["KITCHEN"], windows: prepWindow },
   // Như Anji (chủ quán): Phục vụ T2–T5 trưa 12–14 2–3, tối 18–20 3–4, 20–21 2, 21–đóng cửa 1.
   { label: "Phục vụ trưa T2–T5", when: "12:00 – 14:00 (2–3 người)", minStaff: 2, maxStaff: 3, scaled: false, hard: false, groups: ["SERVICE"], weekdays: MON_THU, windows: lunch },
@@ -178,6 +185,9 @@ const ANAN_RULES: readonly StaffingRule[] = [
 const ANJI_RULES: readonly StaffingRule[] = [
   { label: "Bếp luôn có người", when: "suốt giờ làm (gồm 30′ chuẩn bị)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["KITCHEN"], windows: wholeBlocks },
   { label: "Bồi luôn có người", when: "suốt giờ mở cửa (gồm người chưa gán nhóm)", minStaff: 1, maxStaff: Infinity, scaled: false, hard: true, groups: ["SERVICE"], windows: (blocks) => guestBlocks(blocks) },
+  // Ưu tiên (chủ quán): giờ đông ít nhất 2 bồi mọi ngày – trước người thứ 3, thứ 4.
+  { label: "Bồi ít nhất 2 (12–14)", when: "12:00 – 14:00, mọi ngày (ưu tiên)", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, weight: 15, groups: ["SERVICE"], windows: lunch },
+  { label: "Bồi ít nhất 2 (18–21)", when: "18:00 – 21:00, mọi ngày (ưu tiên)", minStaff: 2, maxStaff: Infinity, scaled: false, hard: false, weight: 15, groups: ["SERVICE"], windows: clip(18 * 60, 21 * 60) },
   { label: "Bếp chuẩn bị", when: "30′ trước giờ mở (T2–T7 10:30, CN/lễ 11:30)", minStaff: 1, maxStaff: 1, scaled: false, hard: false, groups: ["KITCHEN"], windows: prepWindow },
   // Bồi T2–T5 (chủ quán): trưa 12–14 2–3, tối 18–20 3–4, 20–21 2, 21–đóng cửa 1.
   { label: "Bồi trưa T2–T5", when: "12:00 – 14:00 (2–3 người)", minStaff: 2, maxStaff: 3, scaled: false, hard: false, groups: ["SERVICE"], weekdays: MON_THU, windows: lunch },
@@ -221,7 +231,7 @@ export function staffingWindows(
     .filter((rule) => ruleAppliesOn(rule, weekday) && (rule.hard || !present || rule.groups.some((group) => present.has(group))))
     .flatMap((rule) => {
       const range = ruleRange(rule, weekday, profile);
-      return rule.windows(blocks).map((window) => ({ label: rule.label, groups: rule.groups, hard: rule.hard, ...window, ...range }));
+      return rule.windows(blocks).map((window) => ({ label: rule.label, groups: rule.groups, hard: rule.hard, weight: rule.weight, ...window, ...range }));
     });
 }
 

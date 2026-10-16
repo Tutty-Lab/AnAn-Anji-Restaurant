@@ -37,6 +37,7 @@ Restaurant AnAn:
 - **Quy tắc cứng:** từ lúc mở đến lúc đóng cửa luôn có **ít nhất 1 phục vụ và 1 bếp**.
 - **Giờ đông:** trưa **12:00–14:00**, tối **18:00–22:00**. Quy tắc mềm về số người chỉ tính trong giờ đông.
 - **Lúc mở cửa** (11:00–12:00, 17:00–18:00), 14:00–14:30 và T7/CN 14:30–17:00: chỉ cần **1 bếp + 1 phục vụ** (quy tắc cứng).
+- **Ưu tiên (cả hai quán):** Phục vụ/Bồi **ít nhất 2 người lúc 12–14 và 18–21, mọi ngày** – app lo đủ 2 trước rồi mới tới người thứ 3, 4.
 - **Không đủ người:** chỗ thiếu theo quy tắc mềm được dồn sang T2–T4 (T6, T7, CN phạt gấp 3, T2–T4 một nửa). Quy tắc cứng luôn ưu tiên hơn.
 - **Đông nhất T6, T7, CN** (hệ số 1,5; T2–T5 1,0).
 - **Quy tắc mềm – Phục vụ T2–T5:** trưa 12–14 2–3 · 18–20 3–4 · 20–21 2 · 21–đóng cửa 1.

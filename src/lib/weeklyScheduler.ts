@@ -363,7 +363,7 @@ function optionsFor(
 type DayModel = {
   minutes: number[];
   targets: number[];
-  windows: { slots: number[]; overlap: number[]; minStaff: number; maxStaff: number; mask: number; hard: boolean }[];
+  windows: { slots: number[]; overlap: number[]; minStaff: number; maxStaff: number; mask: number; hard: boolean; weight: number }[];
 };
 const dayModelCache = new Map<string, DayModel>();
 function dayModel(blocks: DayBlocks, weekday: WeekdayKey, targetHours: number, present: ReadonlySet<StaffGroup>, profile: StoreProfile): DayModel {
@@ -380,7 +380,7 @@ function dayModel(blocks: DayBlocks, weekday: WeekdayKey, targetHours: number, p
       const covered = Math.min(window.endMinutes, minute + SLOT) - Math.max(window.startMinutes, minute);
       if (covered > 0) { slots.push(index); overlap.push(covered); }
     });
-    return { slots, overlap, minStaff: window.minStaff, maxStaff: window.maxStaff, mask: groupMask(window.groups), hard: window.hard };
+    return { slots, overlap, minStaff: window.minStaff, maxStaff: window.maxStaff, mask: groupMask(window.groups), hard: window.hard, weight: window.weight ?? 1 };
   });
   const model = { minutes, targets: slotList.map(([, target]) => target), windows };
   if (dayModelCache.size > 5000) dayModelCache.clear();
@@ -413,7 +413,7 @@ function dayCost(shifts: Shift[], blocks: DayBlocks, weekday: WeekdayKey, target
     // höhere Gewicht zerlegte die Woche eines Fahrers in mehr, kürzere Abende.
     const driverOnly = window.mask === DRIVER_MASK;
     const soft = SCHEDULER_TUNING.softDayFactor[weekday];
-    const under = driverOnly ? DRIVER_WINDOW_COST : SCHEDULER_TUNING.underStaffCost * (window.hard ? SCHEDULER_TUNING.hardRuleFactor : soft);
+    const under = driverOnly ? DRIVER_WINDOW_COST : SCHEDULER_TUNING.underStaffCost * (window.hard ? SCHEDULER_TUNING.hardRuleFactor : soft * window.weight);
     const over = driverOnly ? DRIVER_WINDOW_COST : SCHEDULER_TUNING.overStaffCost * soft;
     for (let k = 0; k < window.slots.length; k++) {
       const slot = window.slots[k];
